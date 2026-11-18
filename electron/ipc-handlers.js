@@ -263,6 +263,15 @@ function registerIpcHandlers(deps = {}) {
 
     // IPC Handlers for Auto-Update
     ipcMain.handle('download-and-install-update', async (event, updateData) => {
+        // Fork modificado: la actualización automática descargaría la versión
+        // original de Externoak ENCIMA de nuestras modificaciones. Desactivada;
+        // las mejoras del original se incorporan a mano con git.
+        if (process.env.ALLOW_UPSTREAM_AUTO_UPDATE !== '1') {
+            return {
+                success: false,
+                error: 'Actualización automática desactivada en este fork. Incorpora los cambios del original con git.',
+            };
+        }
         try {
 
             const {downloadUrl, version, sha256} = updateData;

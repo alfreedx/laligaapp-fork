@@ -1,5 +1,18 @@
 # LaLiga Fantasy App
 
+> 🔀 **Versión modificada (fork) de LaLigaApp.**
+> Este producto incluye **"LaLigaApp" (c) 2025–presente Externoak** — https://github.com/Externoak/LaLigaApp/
+> Modificaciones (c) 2026 alfreedx, distribuidas bajo la misma licencia **GPL-3.0-or-later con Términos Adicionales — Atribución (GPLv3 §7)**. Ver [LICENSE](./LICENSE) y [NOTICE](./NOTICE).
+> Esta atribución no implica respaldo ni patrocinio por parte de los autores originales. Proyecto no oficial, sin relación con LaLiga Fantasy ni con futbolfantasy.com.
+>
+> **Cambios respecto al original** (GPLv3 §5a):
+> - 2026-11-18 — Actualización automática desde el repositorio original desactivada (evita sobrescribir las modificaciones); se mantiene el aviso de nueva versión.
+> - 2026-11-18 — Captura opcional de respuestas de la API para depuración en el servidor local (solo con la variable `API_CAPTURE_DIR`; nunca guarda cabeceras ni tokens).
+> - 2026-11-18 — Aviso de versión modificada en la interfaz.
+> - 2026-11-18 — Eliminados los workflows de GitHub Actions del original (release automática), no aplicables a este fork.
+
+---
+
 [![Version](https://img.shields.io/badge/version-3.5.7-green.svg)](https://github.com/Externoak/LaLigaApp)
 [![React](https://img.shields.io/badge/React-18.2.0-blue.svg)](https://reactjs.org/)
 ![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)

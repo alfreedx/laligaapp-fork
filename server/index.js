@@ -214,7 +214,36 @@ const createFantasyProxy = (config) => {
     }
   };
 
+  // Captura de depuración (solo si API_CAPTURE_DIR está definida): guarda el
+  // cuerpo JSON de las respuestas GET para estudiar la forma de la API.
+  // Nunca guarda cabeceras ni rutas de autenticación.
+  const captureDir = process.env.API_CAPTURE_DIR;
+  const captureResponse = (proxyRes, req) => {
+    if (!captureDir || req.method !== 'GET') return;
+    const url = req.originalUrl || req.url || '';
+    if (/oauth|token|login|auth/i.test(url)) return;
+    if (!String(proxyRes.headers['content-type'] || '').includes('json')) return;
+    const chunks = [];
+    proxyRes.on('data', (c) => chunks.push(c));
+    proxyRes.on('end', () => {
+      try {
+        const zlib = require('zlib');
+        const fs = require('fs');
+        const path = require('path');
+        let buf = Buffer.concat(chunks);
+        const enc = String(proxyRes.headers['content-encoding'] || '');
+        if (enc.includes('gzip')) buf = zlib.gunzipSync(buf);
+        else if (enc.includes('br')) buf = zlib.brotliDecompressSync(buf);
+        else if (enc.includes('deflate')) buf = zlib.inflateSync(buf);
+        const name = url.split('?')[0].replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 150);
+        fs.mkdirSync(captureDir, { recursive: true });
+        fs.writeFileSync(path.join(captureDir, `${name}.json`), buf);
+      } catch (_e) { /* captura best-effort */ }
+    });
+  };
+
   const handleProxyRes = (proxyRes, req, res) => {
+    captureResponse(proxyRes, req);
     const origin = req.headers.origin;
     if (origin) {
       proxyRes.headers['access-control-allow-origin'] = origin;

@@ -111,5 +111,8 @@
       "icon": "build-resources/fantasy_logo_transparent.png"
     },
     "afterAllArtifactBuild": "scripts/post-build.js"
+  },
+  "allowScripts": {
+    "electron@37.4.0": true
   }
 }

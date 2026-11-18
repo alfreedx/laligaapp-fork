@@ -170,6 +170,7 @@ const SidebarFooter = React.memo(function SidebarFooter({ isAuthenticated, isEle
             </p>
           )}
           <p>Github: <span className="font-medium">https://github.com/Externoak</span></p>
+          <p className="text-gray-400 dark:text-gray-500">Versión modificada por alfreedx · incluye &quot;LaLigaApp&quot; (c) 2025–presente Externoak · GPL-3.0</p>
           <p className="text-gray-400 dark:text-gray-500">App no oficial de LaLiga Fantasy</p>
           <p className="text-gray-400 dark:text-gray-500">Stats de https://www.futbolfantasy.com/</p>
         </div>
