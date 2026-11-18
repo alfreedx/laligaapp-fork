@@ -6,7 +6,7 @@ Todos los cambios relevantes de este fork se documentan aquí. Formato basado en
 
 Este archivo cumple además el requisito de la GPLv3 §5a: indica qué se ha modificado respecto
 a **LaLigaApp 3.5.7** de Externoak y cuándo. Para el historial del proyecto original, ver
-[docs/upstream/README.md](docs/upstream/README.md) y `version.json`.
+[docs/upstream/README.md](docs/upstream/README.md) y el repositorio original.
 
 ## [Sin publicar]
 
@@ -24,6 +24,16 @@ a **LaLigaApp 3.5.7** de Externoak y cuándo. Para el historial del proyecto ori
 
 ### Cambiado
 - El README original de LaLigaApp se conserva íntegro en `docs/upstream/`.
+- Repositorio público.
+
+### Eliminado
+- Código sin uso heredado: `CorsHelp`, `PlayerCard`, `Dashboard/MarketTrends` (esqueleto),
+  `TopPlayers`, `VersionInfo`.
+- Despliegue web con Docker/nginx (`docker/`, `docker-compose.yml`, `nginx.conf`, `.dockerignore`):
+  el fork es de escritorio y su automatización requiere Electron.
+- Lanzador `index.js` (sustituido por los scripts de npm) y `version.json` (las notas de versión se
+  leen del repositorio original).
+- Imágenes sin uso en `build-resources/` y dependencias sin uso (`supertest`, `@types/dompurify`).
 
 ### Corregido
 - Aviso de ESLint en el manejador de errores del servidor (`_next`).

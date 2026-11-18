@@ -6,9 +6,9 @@ Solo se mantiene la última versión de la rama `main`.
 
 ## Cómo informar de una vulnerabilidad
 
-Es un repositorio privado de uso personal. Si tienes acceso y encuentras un problema de
-seguridad, **no abras una incidencia pública**: escribe directamente al propietario del
-repositorio (`alfreedx`) describiendo el problema, cómo reproducirlo y su impacto.
+Si encuentras un problema de seguridad, **no abras una incidencia pública**. Usa
+[*Report a vulnerability*](https://github.com/alfreedx/laligaapp-fork/security/advisories/new)
+(aviso privado de GitHub) describiendo el problema, cómo reproducirlo y su impacto.
 
 Si el problema afecta también al proyecto original, notifícalo a
 [Externoak/LaLigaApp](https://github.com/Externoak/LaLigaApp).
