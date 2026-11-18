@@ -12,7 +12,6 @@ import { runAutoMarket } from './autoMarket';
 import { buildDailyReport, buildSnapshot } from './report';
 import { loadSettings, loadState, saveState, writeJson, readJson, snapshotFile } from './localStore';
 import { clauseRaisesBetween } from '../analytics/rivalIntel';
-import { reportHtmlDocument } from './mdToHtml';
 import { buildPredictionRecord, actualPointsForWeek, evaluateWeek } from '../analytics/backtest';
 
 export const REPORT_FILE = 'informe-fantasy.md';
@@ -112,7 +111,7 @@ export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual
       // PDF legible en móvil y PC (Google Drive lo previsualiza sin apps extra)
       let pdfError = null;
       if (ea?.writePdf) {
-        const pdf = await ea.writePdf(PDF_FILE, reportHtmlDocument(report.markdown, `Informe Fantasy ${localDate()}`));
+        const pdf = await ea.writePdf(PDF_FILE, report.html);
         if (!pdf?.success) pdfError = pdf?.error || 'error desconocido';
       }
 

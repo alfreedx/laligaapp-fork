@@ -151,7 +151,7 @@ function registerAutomation({ getMainWindow }) {
             session.fromPartition(PDF_PARTITION).webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (_d, cb) => cb({ cancel: true }));
             await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
             const pdf = await win.webContents.printToPDF({
-                landscape: true,
+                landscape: false, // A4 vertical: más cómodo en el móvil
                 pageSize: 'A4',
                 printBackground: true,
                 preferCSSPageSize: true,

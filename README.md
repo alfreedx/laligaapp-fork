@@ -23,6 +23,7 @@
 > - 2026-11-19 — Rentabilidad, "Mercado hoy": sin los jugadores propios.
 > - 2026-11-19 — Mi Alineación: botón **"Cargar recomendada"** que rellena formación y titulares con el once de más puntos esperados (se guarda solo al pulsar Guardar) e indica capitán y entrenador recomendados.
 > - 2026-11-19 — Mi Alineación: **capitán, entrenador y banquillo** (premium) editables y guardados junto a la alineación, con verificación posterior contra la API; "Cargar recomendada" también los rellena.
+> - 2026-11-19 — **Informe rediseñado**: cifras clave, "Qué hacer hoy" priorizado, once dibujado en un campo, tablas reducidas a lo esencial, PDF en A4 vertical. Las ganancias de mercado descuentan la sobrepuja típica de la liga y solo se proponen fichajes asumibles con el saldo (o aceptando ofertas con ganancia).
 > - 2026-11-19 — Informe también en **PDF** (`informe-fantasy.pdf`, A4 horizontal) para leerlo en móvil y PC sin visores especiales; generado en una ventana oculta sin JavaScript ni red.
 > - 2026-11-18 — Eliminados los workflows de GitHub Actions del original (release automática), no aplicables a este fork.
 
