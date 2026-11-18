@@ -10,7 +10,8 @@ const {
 } = require('./electron/server-manager');
 const { processPendingUpdates } = require('./electron/auto-updater');
 const { registerIpcHandlers } = require('./electron/ipc-handlers');
-const { registerAutomation } = require('./electron/automation');
+const { registerAutomation, getExportDir } = require('./electron/automation');
+const { registerTelegram } = require('./electron/telegram');
 
 let mainWindow;
 const activeAppOrigins = new Set();
@@ -142,6 +143,9 @@ registerIpcHandlers({
 const automation = registerAutomation({ getMainWindow: () => mainWindow });
 
 if (automation.isPrimary) {
+    // Notificaciones al móvil por Telegram (clave cifrada, solo en el proceso principal)
+    registerTelegram({ getExportDir });
+
     app.whenReady().then(async () => {
         await createWindow();
         if (automation.isDailyRun && mainWindow) {

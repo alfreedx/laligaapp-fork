@@ -5,6 +5,7 @@
 import {
   isNum, M, SM, K, N, PCT, dt, STATUS_ICON, LINE_LABEL, trendArrow, venueIcon,
 } from './reportFormat';
+import { EDITIONS } from './schedule';
 
 const esc = (s) => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -84,7 +85,7 @@ export const renderReportHtml = (m) => {
   // Cabecera + cifras clave
   parts.push(`<div class="hero">
     <h1>Informe Fantasy${m.leagueName ? ` · ${esc(m.leagueName)}` : ''}</h1>
-    <div class="sub">${esc(m.now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))} · Jornada ${esc(m.week ?? '?')}${m.weekStart ? ` empieza ${esc(dt(m.weekStart))}` : ''}</div>
+    <div class="sub">${esc(EDITIONS[m.edition]?.icon || "")} <b>${esc(EDITIONS[m.edition]?.label || "")}</b> · ${esc(m.now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))} · Jornada ${esc(m.week ?? '?')}${m.weekStart ? ` empieza ${esc(dt(m.weekStart))}` : ''}</div>
     <div class="kpis">
       <div class="kpi"><div class="l">Clasificación</div><div class="v">${esc(k.rank || '?')}º · ${esc(k.points)}</div><div class="s">${isNum(k.gap) ? `${k.gap >= 0 ? '+' : ''}${esc(k.gap)} pts vs ${esc(k.closest)}` : ''}</div></div>
       <div class="kpi"><div class="l">Saldo</div><div class="v">${esc(M(k.money))}</div><div class="s">${isNum(k.money) && k.money < 0 ? '⚠️ negativo' : 'disponible'}</div></div>
@@ -92,6 +93,9 @@ export const renderReportHtml = (m) => {
       <div class="kpi"><div class="l">Si vendes a LaLiga</div><div class="v">${esc(SM(k.gainLaLiga))}</div><div class="s">${isNum(k.gainLaLigaN) ? `en ${m.days} días: ${esc(SM(k.gainLaLigaN))}` : 'sobre lo pagado'}</div></div>
     </div>
   </div>`);
+  parts.push(m.edition === 'cierre'
+    ? '<p class="callout">⏳ <b>Antes del cierre</b>: las ofertas y pujas se resuelven a las 19:00. Actúa antes.</p>'
+    : '<p class="callout">🆕 <b>Mercado nuevo</b>: los valores se actualizan de madrugada, así que las proyecciones usan los de hoy.</p>');
   if (!m.trendsOk) parts.push('<p class="callout">⚠️ Sin datos de futbolfantasy hoy: no hay tendencias ni proyecciones.</p>');
 
   // Qué hacer hoy

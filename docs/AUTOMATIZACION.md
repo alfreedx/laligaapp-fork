@@ -2,18 +2,24 @@
 
 ## Qué hace
 
-Cada día, tras el reseteo del mercado (por defecto **19:05**; configurable en *Ajustes y
-automatización*), la app:
+En cada hora programada (configurables en *Ajustes y automatización*), la app genera una edición del informe:
+
+| Hora (por defecto) | Edición | Para qué |
+|---|---|---|
+| 18:50 | ⏳ Antes del cierre | Actuar sobre el mercado del día: ofertas y pujas se resuelven a las 19:00. |
+| 19:10 | 🆕 Mercado nuevo | Preparar el día siguiente. Los valores se actualizan de madrugada. Aquí se ejecuta el auto-mercado. |
+
+En cada una:
 
 1. Descarga datos frescos de la liga y de futbolfantasy.
 2. Guarda una captura local del día.
-3. Ejecuta el **auto-mercado** si está activado.
+3. Ejecuta el **auto-mercado** si está activado (solo en la edición de mercado nuevo).
 4. Evalúa la previsión de las jornadas ya terminadas.
 5. Escribe en la carpeta de exportación:
    - `informe-fantasy.pdf`: informe visual (móvil y PC);
    - `informe-fantasy.md`: misma información en texto, ideal para Claude u otros asistentes;
    - `plantilla.json`: todos los datos estructurados.
-6. Muestra una notificación de Windows con el resumen.
+6. Muestra una notificación de Windows y, si está configurado, envía a **Telegram** el resumen y el PDF.
 
 Si la app no estaba abierta a la hora programada, el trabajo se ejecuta en cuanto se abre.
 
@@ -21,14 +27,14 @@ Si la app no estaba abierta a la hora programada, el trabajo se ejecuta en cuant
 
 `scripts/register-task.ps1` crea la tarea **"LaLigaFantasy - Informe diario"**, que:
 
-- lanza `LaLiga Fantasy App.exe --daily-run` todos los días a la hora indicada;
+- lanza `LaLiga Fantasy App.exe --daily-run` todos los días a cada hora indicada;
 - **despierta el equipo** si está en suspensión (`WakeToRun`);
 - se ejecuta en cuanto sea posible si se perdió la hora (`StartWhenAvailable`);
 - tiene un límite de 20 minutos.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/register-task.ps1            # 19:05
-powershell -ExecutionPolicy Bypass -File scripts/register-task.ps1 -At 19:10  # otra hora
+powershell -ExecutionPolicy Bypass -File scripts/register-task.ps1                    # 18:50 y 19:10
+powershell -ExecutionPolicy Bypass -File scripts/register-task.ps1 -At 18:45,19:15    # otras horas
 powershell -ExecutionPolicy Bypass -File scripts/register-task.ps1 -Remove    # eliminarla
 ```
 
@@ -50,6 +56,15 @@ Requisitos:
 Desde el móvil, abre `informe-fantasy.pdf` con la app de Google Drive. Para un asistente con
 acceso a Drive, `informe-fantasy.md` y `plantilla.json` son los más cómodos de leer.
 
+## Telegram
+
+1. En Telegram, abre **@BotFather**, envía `/newbot` y elige nombre y usuario (acabado en `bot`).
+2. Copia la clave del bot y pégala en *Ajustes → Notificaciones al móvil*. Se guarda cifrada con tu usuario de Windows (`safeStorage`) y solo la usa el proceso principal.
+3. Abre tu bot, pulsa **Iniciar** y después **Detectar mi chat** en la app.
+4. **Enviar prueba** para comprobarlo.
+
+Cada informe llega como mensaje (cifras clave y *Qué hacer*) con el PDF adjunto. Los errores también se notifican.
+
 ## Avisos de cláusulas
 
 Con la app abierta (aunque esté minimizada), se envía una notificación cuando se abre la
@@ -67,7 +82,7 @@ El resultado aparece en el informe y en *Ajustes*.
 
 | Síntoma | Qué revisar |
 |---|---|
-| No se genera a las 19:05 | La tarea existe (`Get-ScheduledTask "LaLigaFantasy - Informe diario"`), el equipo estaba en suspensión y enchufado, sesión iniciada en la app. |
+| No se genera a la hora programada | La tarea existe (`Get-ScheduledTask "LaLigaFantasy - Informe diario"`), el equipo estaba en suspensión y enchufado, sesión iniciada en la app. |
 | "Informe Fantasy: no generado" | Sesión caducada o sin conexión: abre la app e inicia sesión. |
 | El PDF no aparece | *Ajustes* muestra el error del último intento; el `.md` y el `.json` se escriben igualmente. |
 | No llegan avisos de cláusula | La app debe estar abierta; la lista se crea al generar un informe. |

@@ -1,11 +1,11 @@
 /**
- * Trabajo diario (tras el reseteo del mercado de las 19:00):
+ * Trabajo diario, en cada hora programada (por defecto 18:50 y 19:10):
  *   1. descarga datos frescos de la liga
  *   2. guarda una captura local del día
- *   3. auto-mercado (si está activado)
- *   4. genera informe-fantasy.md + plantilla.json en la carpeta de exportación
+ *   3. auto-mercado (si está activado; solo en la edición de "mercado nuevo")
+ *   4. genera informe-fantasy.pdf/.md + plantilla.json en la carpeta de exportación
  *      (sobrescribe el anterior → en Drive solo queda el último)
- *   5. notificación de Windows
+ *   5. notificación de Windows y, si está configurado, Telegram (resumen + PDF)
  */
 import { loadLeagueData } from './dataLoader';
 import { runAutoMarket } from './autoMarket';
@@ -13,26 +13,14 @@ import { buildDailyReport, buildSnapshot } from './report';
 import { loadSettings, loadState, saveState, writeJson, readJson, snapshotFile } from './localStore';
 import { clauseRaisesBetween } from '../analytics/rivalIntel';
 import { buildPredictionRecord, actualPointsForWeek, evaluateWeek } from '../analytics/backtest';
+import { currentEdition, EDITIONS } from './schedule';
+import { buildTelegramSummary, buildTelegramError } from './telegramMessage';
+
+export { isRunDue } from './schedule';
 
 export const REPORT_FILE = 'informe-fantasy.md';
 export const DATA_FILE = 'plantilla.json';
 export const PDF_FILE = 'informe-fantasy.pdf';
-
-/** Último instante programado (hh:mm) que ya ha pasado respecto a `now`. */
-export const lastScheduledSlot = (now, hour, minute) => {
-  const slot = new Date(now);
-  slot.setHours(hour, minute, 0, 0);
-  if (slot > now) slot.setDate(slot.getDate() - 1);
-  return slot;
-};
-
-/** ¿Toca ejecutar? Sí si no se ha ejecutado desde el último horario. */
-export const isRunDue = (state, settings, now = new Date()) => {
-  if (!settings.dailyReportEnabled) return false;
-  const slot = lastScheduledSlot(now, settings.runHour, settings.runMinute);
-  const last = state?.lastSuccessAt ? new Date(state.lastSuccessAt) : null;
-  return !last || last < slot;
-};
 
 const localDate = (d = new Date()) => {
   const p = (n) => String(n).padStart(2, '0');
@@ -41,13 +29,15 @@ const localDate = (d = new Date()) => {
 
 let running = null;
 
-export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual' }) => {
+export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual', edition: forcedEdition = null }) => {
   if (running) return running; // nunca dos ejecuciones a la vez
   running = (async () => {
     const startedAt = new Date().toISOString();
     const settings = await loadSettings();
     const state = await loadState();
     const ea = window.electronAPI?.automation;
+    const tg = settings.telegramEnabled ? window.electronAPI?.telegram : null;
+    const edition = forcedEdition || currentEdition(new Date(), settings);
     try {
       const data = await loadLeagueData({ leagueId, user });
 
@@ -71,8 +61,9 @@ export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual
         clauseSpend.set(mid, (clauseSpend.get(mid) || 0) + (r.estimatedCost || 0));
       }));
 
+      // El auto-mercado solo tiene sentido tras el reseteo (edición "mercado nuevo")
       let autoMarketLog = [];
-      if (settings.autoMarketEnabled) {
+      if (settings.autoMarketEnabled && edition === 'apertura') {
         autoMarketLog = await runAutoMarket({
           leagueId,
           myTeam: data.myTeam,
@@ -91,7 +82,7 @@ export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual
         if (actual.size) backtests[w] = evaluateWeek(predictions[w], actual);
       });
 
-      const report = buildDailyReport(data, { settings, autoMarketLog, playerNames: data.playerNames, leagueName, clauseSpend, backtests });
+      const report = buildDailyReport(data, { settings, autoMarketLog, playerNames: data.playerNames, leagueName, clauseSpend, backtests, edition });
 
       // Guardar la previsión de la jornada mientras no haya empezado (la última antes del inicio cuenta)
       if (data.week && data.weekInfo?.openingWeekDate && now < new Date(data.weekInfo.openingWeekDate)) {
@@ -115,13 +106,30 @@ export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual
         if (!pdf?.success) pdfError = pdf?.error || 'error desconocido';
       }
 
+      // Telegram: resumen + PDF adjunto
+      let telegramError = null;
+      if (tg) {
+        const msg = await tg.sendMessage(buildTelegramSummary(report.model));
+        if (!msg?.success) telegramError = msg?.error;
+        if (!telegramError && settings.telegramSendPdf && !pdfError) {
+          const ed = EDITIONS[edition];
+          const doc = await tg.sendDocument(PDF_FILE, `${ed.icon} Informe completo · ${ed.label}`);
+          if (!doc?.success) telegramError = doc?.error;
+        }
+      }
+
       const listed = autoMarketLog.filter((l) => l.status === 'listed').length;
+      const warnings = [
+        pdfError && `el PDF falló: ${pdfError}`,
+        telegramError && `Telegram falló: ${telegramError}`,
+      ].filter(Boolean);
       const newState = {
         ...state,
         lastRunAt: startedAt,
         lastSuccessAt: new Date().toISOString(),
         lastSource: source,
-        lastError: pdfError ? `Informe generado, pero el PDF falló: ${pdfError}` : null,
+        lastEdition: edition,
+        lastError: warnings.length ? `Informe generado, pero ${warnings.join('; ')}` : null,
         lastExportDir: exportResult.dir,
         lastAutoMarket: autoMarketLog,
         lastCounts: report.counts,
@@ -136,13 +144,14 @@ export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual
         const parts = [`${report.counts.econ} oportunidades de mercado`, `${report.counts.clauseSoon} cláusulas en 48 h`];
         if (report.counts.alerts) parts.push(`${report.counts.alerts} aviso(s)`);
         if (settings.autoMarketEnabled) parts.push(settings.autoMarketDryRun ? `${autoMarketLog.length} al mercado (simulado)` : `${listed} puestos en venta`);
-        await ea.notify('Informe Fantasy listo', parts.join(' · '));
+        await ea.notify(`Informe Fantasy listo · ${EDITIONS[edition].label}`, parts.join(' · '));
       }
       return { success: true, state: newState, report };
     } catch (error) {
       const newState = { ...state, lastRunAt: startedAt, lastError: error.message, lastSource: source };
       await saveState(newState);
       if (ea) await ea.notify('Informe Fantasy: error', error.message);
+      if (tg) await tg.sendMessage(buildTelegramError(error.message)).catch(() => {});
       return { success: false, error: error.message, state: newState };
     }
   })();

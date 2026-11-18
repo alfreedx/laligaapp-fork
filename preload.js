@@ -50,6 +50,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
 
+  // Fork: Telegram (la clave del bot nunca vuelve al renderer)
+  telegram: {
+    getConfig: () => ipcRenderer.invoke('telegram:get-config'),
+    setToken: (token) => ipcRenderer.invoke('telegram:set-token', token),
+    detectChat: () => ipcRenderer.invoke('telegram:detect-chat'),
+    sendMessage: (text) => ipcRenderer.invoke('telegram:send-message', text),
+    sendDocument: (name, caption) => ipcRenderer.invoke('telegram:send-document', { name, caption }),
+  },
+
   // ✅ fixed logger
   log: (...args) => {
     if (process.env.NODE_ENV === 'development') {

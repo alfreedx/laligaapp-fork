@@ -21,6 +21,10 @@ a **LaLigaApp 3.5.7** de Externoak y cuándo. Para el historial del proyecto ori
   de la liga la supera.
 - Informe: las oportunidades deportivas indican **a quién mejoran de la alineación guardada** y por
   cuántos puntos, y se ordenan priorizando las que mejoran el once.
+- **Dos informes al día**: 18:50 *Antes del cierre* (actuar sobre el mercado del día) y 19:10
+  *Mercado nuevo* (preparar el siguiente; el auto-mercado solo se ejecuta aquí). Horas configurables.
+- **Notificaciones al móvil por Telegram** (bot propio): resumen con *Qué hacer*, PDF adjunto,
+  avisos de cláusulas y errores. Clave del bot cifrada con `safeStorage` en el proceso principal.
 
 ### Cambiado
 - El README original de LaLigaApp se conserva íntegro en `docs/upstream/`.

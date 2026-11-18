@@ -51,8 +51,11 @@ export const snapshotFile = (date) => `snapshots/${date}.json`;
 
 export const DEFAULT_SETTINGS = {
   dailyReportEnabled: true,
-  runHour: 19,
-  runMinute: 5,
+  // 18:50 = antes del cierre (actuar sobre el mercado del día) · 19:10 = mercado nuevo
+  runTimes: ['18:50', '19:10'],
+  telegramEnabled: false,      // se activa al configurar el bot en Ajustes
+  telegramSendPdf: true,       // adjuntar el PDF del informe
+  telegramClauseAlerts: true,  // avisos de apertura de cláusulas también por Telegram
   clauseAlertsEnabled: true,  // notificar cuando se abre la cláusula de un rival (app abierta)
   autoMarketEnabled: false,   // desactivado hasta que el usuario lo active
   autoMarketDryRun: true,     // simulación: registra lo que haría sin hacerlo

@@ -194,4 +194,4 @@ function registerAutomation({ getMainWindow }) {
     return { isPrimary: true, isDailyRun: dailyRunActive };
 }
 
-module.exports = { registerAutomation, isDailyRun };
+module.exports = { registerAutomation, isDailyRun, getExportDir };

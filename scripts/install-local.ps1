@@ -1,4 +1,4 @@
-# Copia el ejecutable compilado (npm run build:electron) a la carpeta fija
+﻿# Copia el ejecutable compilado (npm run build:electron) a la carpeta fija
 # que usa la tarea programada "LaLigaFantasy - Informe diario".
 $ErrorActionPreference = 'Stop'
 $src = Join-Path $PSScriptRoot '..\dist\LaLiga-Fantasy-App\win-unpacked'

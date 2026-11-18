@@ -14,6 +14,7 @@ import { buildBidStats, recentActivity, suggestedBid } from '../analytics/rivalI
 import { buildProtectionPlan } from '../analytics/protection';
 import { VARIANTS, bestVariant } from '../analytics/backtest';
 import { renderReportHtml } from './reportHtml';
+import { EDITIONS } from './schedule';
 import {
   isNum, M, SM, K, N, PCT, dt, STATUS_ICON, LINE_LABEL, trendArrow, venueIcon as venue,
 } from './reportFormat';
@@ -21,7 +22,7 @@ import {
 const H48 = 48 * 3600 * 1000;
 
 // ------------------------------------------------------------------ modelo
-export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leagueName = '', clauseSpend = null, backtests = {} } = {}) => {
+export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leagueName = '', clauseSpend = null, backtests = {}, edition = 'apertura' } = {}) => {
   const days = settings.projectionDays || 5;
   const now = new Date();
   const common = { ledger: data.ledger, resolveTrend: data.resolveTrend, rateMode: 'avg3' };
@@ -162,7 +163,7 @@ export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leag
   });
 
   return {
-    now, days, leagueName, settings, autoMarketLog,
+    now, days, leagueName, settings, autoMarketLog, edition,
     week: data.week, weekStart: start, trendsOk: data.trendsOk,
     kpis: {
       rank: myRank, points: myPts, gap, closest: closest?.managerName,
@@ -192,10 +193,13 @@ const table = (headers, rows) => [
 export const renderMarkdown = (m) => {
   const md = [];
   const k = m.kpis;
-  md.push(`# Informe Fantasy${m.leagueName ? ` — ${m.leagueName}` : ''} · ${m.now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}`);
+  md.push(`# ${EDITIONS[m.edition]?.icon || ''} Informe Fantasy (${EDITIONS[m.edition]?.label || ''})${m.leagueName ? ` — ${m.leagueName}` : ''} · ${m.now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}`);
   md.push(`Jornada ${m.week ?? '?'}${m.weekStart ? ` · empieza ${dt(m.weekStart)}` : ''} · generado ${m.now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`);
   md.push('');
   md.push(`**${k.rank || '?'}º · ${k.points} pts**${isNum(k.gap) ? ` (${k.gap >= 0 ? '+' : ''}${k.gap} vs ${k.closest})` : ''} · Saldo **${M(k.money)}** · Equipo **${M(k.teamValue)}** · Si vendes a LaLiga hoy: **${SM(k.gainLaLiga)}**${isNum(k.gainLaLigaN) ? ` (en ${m.days}d: ${SM(k.gainLaLigaN)})` : ''}`);
+  md.push(m.edition === 'cierre'
+    ? '\n> ⏳ Antes del cierre: las ofertas y pujas se resuelven a las 19:00. Actúa antes.'
+    : '\n> 🆕 Mercado nuevo: los valores se actualizan de madrugada, así que las proyecciones usan los de hoy.');
   if (!m.trendsOk) md.push('\n⚠️ Sin datos de futbolfantasy hoy: no hay tendencias ni proyecciones.');
   md.push('');
 
@@ -303,6 +307,7 @@ const buildJson = (m) => {
   const L = m.lineup;
   return {
     generado: m.now.toISOString(),
+    edicion: m.edition, // 'cierre' (antes del reseteo de las 19:00) o 'apertura' (mercado nuevo)
     liga: m.leagueName || null,
     jornada: m.week,
     inicioJornada: m.weekStart || null,

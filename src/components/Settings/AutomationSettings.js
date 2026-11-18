@@ -9,6 +9,8 @@ import { extractTeamPlayers } from '../../utils/fetchAllTeamsData';
 import { runDailyJob } from '../../services/automation/dailyJob';
 import { loadSettings, saveSettings, loadState } from '../../services/automation/localStore';
 import { planAutoMarket } from '../../services/automation/autoMarket';
+import { EDITIONS, editionForTime, parseTime, scheduleTimes } from '../../services/automation/schedule';
+import TelegramSettings from './TelegramSettings';
 
 const fmtDate = (v) => (v ? new Date(v).toLocaleString('es-ES') : '—');
 const fmtM = (v) => (typeof v === 'number' ? `${(v / 1e6).toFixed(2).replace('.', ',')} M` : '—');
@@ -69,6 +71,7 @@ const AutomationSettings = () => {
   };
 
   if (!settings) return null;
+  const times = scheduleTimes(settings);
 
   const excluded = new Set(settings.autoMarketExcluded.map(String));
   const toggleExcluded = (id) => {
@@ -87,20 +90,43 @@ const AutomationSettings = () => {
           checked={settings.dailyReportEnabled}
           onChange={(v) => update({ dailyReportEnabled: v })}
           label="Generar el informe automáticamente cada día"
-          hint="Tras el reseteo del mercado. Si a esa hora la app no estaba abierta, se genera en cuanto la abras."
+          hint="En cada hora programada. Si a esa hora la app no estaba abierta, se genera en cuanto la abras."
         />
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span>Hora:</span>
-          <input
-            type="time"
-            className="input-field !py-1 w-28"
-            value={`${String(settings.runHour).padStart(2, '0')}:${String(settings.runMinute).padStart(2, '0')}`}
-            onChange={(e) => {
-              const [h, m] = e.target.value.split(':').map((x) => parseInt(x, 10));
-              if (Number.isFinite(h) && Number.isFinite(m)) update({ runHour: h, runMinute: m });
-            }}
-          />
-          <span className="text-gray-500">(el mercado se resetea a las 19:00)</span>
+        <div className="space-y-2 text-sm">
+          {times.map((t, i) => {
+            const ed = EDITIONS[editionForTime(parseTime(t))];
+            return (
+              <div key={i} className="flex flex-wrap items-center gap-2">
+                <input
+                  type="time"
+                  className="input-field !py-1 w-28"
+                  value={t}
+                  onChange={(e) => {
+                    if (!parseTime(e.target.value)) return;
+                    const next = [...times];
+                    next[i] = e.target.value;
+                    update({ runTimes: next });
+                  }}
+                />
+                <span>{ed.icon} <b>{ed.label}</b></span>
+                <span className="text-gray-500 text-xs">
+                  {editionForTime(parseTime(t)) === 'cierre'
+                    ? 'para actuar sobre el mercado del día (ofertas y pujas se resuelven a las 19:00)'
+                    : 'mercado nuevo; aquí se ejecuta el auto-mercado'}
+                </span>
+                {times.length > 1 && (
+                  <button className="text-xs text-red-600 hover:underline" onClick={() => update({ runTimes: times.filter((_, j) => j !== i) })}>quitar</button>
+                )}
+              </div>
+            );
+          })}
+          {times.length < 4 && (
+            <button className="text-xs text-primary-600 hover:underline" onClick={() => update({ runTimes: [...times, '21:00'] })}>+ añadir hora</button>
+          )}
+          <p className="text-xs text-gray-500">
+            El mercado se resetea a las 19:00. Si cambias las horas, vuelve a registrar la tarea programada para que el PC despierte a esas horas:
+            <code className="ml-1">scripts/register-task.ps1 -At {times.join(',')}</code>
+          </p>
         </div>
 
         <div className="text-sm space-y-1">
@@ -126,10 +152,12 @@ const AutomationSettings = () => {
           <div className="text-sm">
             {state.lastError
               ? <span className="text-red-600 flex items-center gap-1"><AlertTriangle className="w-4 h-4" /> Último intento {fmtDate(state.lastRunAt)}: {state.lastError}</span>
-              : <span className="text-green-700 dark:text-green-400 flex items-center gap-1"><CheckCircle2 className="w-4 h-4" /> Último informe: {fmtDate(state.lastSuccessAt)} {state.lastSource ? `(${state.lastSource})` : ''}</span>}
+              : <span className="text-green-700 dark:text-green-400 flex items-center gap-1"><CheckCircle2 className="w-4 h-4" /> Último informe: {fmtDate(state.lastSuccessAt)} {state.lastEdition ? `· ${EDITIONS[state.lastEdition]?.label}` : ''} {state.lastSource ? `(${state.lastSource})` : ''}</span>}
           </div>
         </div>
       </div>
+
+      <TelegramSettings settings={settings} update={update} />
 
       {/* Avisos de cláusulas */}
       <div className="card p-6 space-y-3">

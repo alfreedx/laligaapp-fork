@@ -38,8 +38,9 @@ Además de todo lo que ya ofrece LaLigaApp (mercado, plantillas, cláusulas, act
 | 🧠 **Previsión y alineación** | Puntos esperados (xP) por jugador según media, forma, casa/fuera y probabilidad de jugar. Once óptimo con formaciones estándar y premium, **capitán, entrenador y banquillo**; botón *Cargar recomendada* en Mi Alineación con verificación tras guardar. |
 | 🕵️ **Rivales** | Dinero estimado de cada manager, sobrepuja habitual en las pujas, actividad reciente y subidas de cláusula detectadas entre capturas diarias. |
 | 🛡️ **Protección** | Jugadores propios expuestos a cláusula, qué rivales pueden pagarla y si conviene blindar o subir la cláusula. |
-| 📄 **Informe diario** | Tras el reseteo del mercado: *Qué hacer hoy*, once recomendado, ofertas con ganancia, oportunidades económicas y deportivas (mercado + cláusulas que se abren en 48 h), plantilla y rivales. Se genera en **PDF** (móvil y PC), **Markdown** y **JSON** en la carpeta que elijas (p. ej. Google Drive). |
-| 🔔 **Avisos** | Notificación de Windows cuando se abre la cláusula de un jugador rival. |
+| 📄 **Informe diario** | Dos ediciones: **18:50** *Antes del cierre* y **19:10** *Mercado nuevo*. *Qué hacer hoy*, once recomendado, ofertas con ganancia, oportunidades económicas y deportivas (mercado + cláusulas que se abren en 48 h), plantilla y rivales. Se genera en **PDF** (móvil y PC), **Markdown** y **JSON** en la carpeta que elijas (p. ej. Google Drive). |
+| 📱 **Telegram** | Cada informe llega al móvil: resumen con *Qué hacer* y el PDF adjunto; también avisos de cláusulas y errores. |
+| 🔔 **Avisos** | Notificación (Windows y Telegram) cuando se abre la cláusula de un jugador rival. |
 | 🤖 **Auto-mercado** *(opcional)* | Vuelve a poner a la venta tus jugadores a valor de mercado para recibir la oferta diaria de LaLiga. Desactivado y en modo simulación por defecto; **nunca acepta ofertas ni puja**. |
 | 📏 **Precisión** | Guarda la previsión antes de cada jornada y la compara con los puntos reales. |
 
@@ -76,18 +77,18 @@ Glosario rápido: **xP** = puntos esperados la próxima jornada · **LaLiga** = 
 
 ## Automatización diaria
 
-El trabajo diario se ejecuta **tras el reseteo del mercado (19:05 por defecto)**:
+El trabajo diario se ejecuta en cada hora programada (por defecto **18:50**, antes del reseteo de las 19:00, y **19:10**, con el mercado nuevo):
 
 1. Descarga datos frescos (plantillas, mercado, actividad completa, ofertas, futbolfantasy).
 2. Guarda una captura local del día (histórico propio; no se sube a ningún sitio).
 3. Ejecuta el auto-mercado si está activado.
 4. Escribe `informe-fantasy.pdf`, `informe-fantasy.md` y `plantilla.json` en la carpeta configurada (sobrescribe los del día anterior).
-5. Muestra una notificación.
+5. Muestra una notificación y, si está configurado, envía el resumen y el PDF por **Telegram**.
 
 Si a esa hora la app no estaba abierta, el trabajo se ejecuta en cuanto la abras. Para que funcione con el portátil en suspensión, registra la tarea programada:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/register-task.ps1   # 19:05, despierta el equipo
+powershell -ExecutionPolicy Bypass -File scripts/register-task.ps1   # 18:50 y 19:10, despierta el equipo
 ```
 
 Detalles en [docs/AUTOMATIZACION.md](docs/AUTOMATIZACION.md).
