@@ -8,6 +8,8 @@ import {
 } from '../analytics/rows';
 import { bestLineup } from '../analytics/forecast';
 import { buildBidStats, recentActivity, suggestedBid } from '../analytics/rivalIntel';
+import { buildProtectionPlan } from '../analytics/protection';
+import { VARIANTS, bestVariant } from '../analytics/backtest';
 
 const H48 = 48 * 3600 * 1000;
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -31,7 +33,7 @@ const clauseText = (r) => (r.isShielded ? 'blindado' : r.clauseIsOpen ? 'ABIERTA
  * @param {object} data   salida de loadLeagueData
  * @param {object} opts   { settings, autoMarketLog, playerNames, leagueName }
  */
-export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], playerNames = new Map(), leagueName = '', clauseSpend = null } = {}) => {
+export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], playerNames = new Map(), leagueName = '', clauseSpend = null, backtests = {} } = {}) => {
   const days = settings.projectionDays || 5;
   const now = new Date();
   const common = { ledger: data.ledger, resolveTrend: data.resolveTrend, rateMode: 'avg3' };
@@ -59,14 +61,6 @@ export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], play
     alerts.push(`💸 **Saldo negativo (${M(data.myMoney)} M)** — si empieza la jornada${data.weekInfo?.openingWeekDate ? ` (${dt(data.weekInfo.openingWeekDate)})` : ''} en negativo puntúas 0. Vende antes.`);
   }
   squad.filter((r) => r.status && r.status !== 'ok').forEach((r) => alerts.push(`${STATUS[r.status] || r.status}: **${r.name}**`));
-  const richRivals = money.filter((m) => !m.isMe);
-  const exposed = squad.filter((r) => r.clauseIsOpen && !r.isShielded && isNum(r.clause))
-    .map((r) => ({ r, can: richRivals.filter((m) => isNum(m.calibrated) && m.calibrated >= r.clause).length }))
-    .filter((x) => x.can > 0)
-    .sort((a, b) => (b.r.averagePoints ?? 0) - (a.r.averagePoints ?? 0));
-  if (exposed.length) {
-    alerts.push(`🔓 Cláusula abierta en ${exposed.length} jugador(es) que algún rival podría pagar: ${exposed.map((x) => `**${x.r.name}** (${M(x.r.clause)} M, ${x.can} rival/es)`).join(', ')}. Valora blindar o subir la cláusula de los importantes.`);
-  }
 
   // Ofertas recibidas (mejor oferta por jugador) con la ganancia si se acepta
   const offerName = (o) => o?.buyerTeam?.manager?.managerName || o?.buyer?.managerName || o?.team?.manager?.managerName || 'LaLiga';
@@ -125,6 +119,15 @@ export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], play
   lineup.starters.forEach((p) => {
     if (!worstStarter[p.positionId] || p.xp < worstStarter[p.positionId].xp) worstStarter[p.positionId] = p;
   });
+  // ---- protección de mi plantilla frente a cláusulas ----
+  const protection = buildProtectionPlan({
+    squad, money, starterIds: new Set(lineup.starters.map((p) => p.id)), costFactor: settings.clauseRaiseCostFactor ?? 0.5, now,
+  });
+  const toProtect = protection.filter((p) => p.action === 'Proteger');
+  if (toProtect.length) {
+    alerts.push(`🛡️ ${toProtect.length} jugador(es) importantes expuestos a cláusula: ${toProtect.map((p) => `**${p.name}**`).join(', ')} — ver "Protección de tu plantilla".`);
+  }
+
   const upgrades = candidates
     .filter((r) => r.positionId !== 5 && isNum(r.xp) && worstStarter[r.positionId] && r.xp > worstStarter[r.positionId].xp + 0.5)
     .map((r) => ({ r, replaces: worstStarter[r.positionId], delta: r.xp - worstStarter[r.positionId].xp }))
@@ -164,6 +167,38 @@ export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], play
   if (doubtfulStarters.length) md.push(`⚠️ Titulares con probabilidad < 60 %: ${doubtfulStarters.map((p) => `${p.name} (${Math.round(p.playProb * 100)} %)`).join(', ')} — revisa los onces probables antes del cierre.`);
   md.push('_* probabilidad estimada (futbolfantasy no da dato para ese jugador)._');
   md.push('');
+
+  if (protection.length) {
+    md.push('## 🛡️ Protección de tu plantilla (cláusulas abiertas o que se abren en ≤ 48 h)');
+    md.push(table(['Jugador', 'Titular', 'xP', 'Cláusula', 'Estado', 'Pueden pagarla', 'Si te lo clausulan', 'Recomendación', 'Subir a', 'Coste est.'],
+      protection.map((p) => [
+        p.name, p.isStarter ? 'sí' : 'no', N(p.xp), M(p.clause), clauseText(p),
+        p.canPay.length ? `${p.canPay.length}: ${p.canPay.slice(0, 3).join(', ')}${p.canPay.length > 3 ? '…' : ''}` : 'nadie',
+        SM(p.ifClausedGain), `**${p.action}** — ${p.reason}`,
+        p.action === 'Proteger' && p.targetClause ? `${M(p.targetClause)} (${p.rivalsExcluded}/${p.canPay.length} fuera)` : '—',
+        p.action === 'Proteger' && p.raiseCost ? M(p.raiseCost) : '—',
+      ])));
+    md.push(`_Coste de subir la cláusula estimado como ${Math.round((settings.clauseRaiseCostFactor ?? 0.5) * 100)} % del aumento (sin confirmar). Blindar evita el riesgo sin subirla._`);
+    md.push('');
+  }
+
+  // ---- precisión de la previsión (jornadas ya jugadas) ----
+  const evWeeks = Object.keys(backtests || {}).map(Number).sort((a, b) => b - a);
+  if (evWeeks.length) {
+    const last = backtests[evWeeks[0]];
+    const ranked = bestVariant(backtests);
+    md.push(`## 📏 Precisión de la previsión (última jornada evaluada: ${evWeeks[0]})`);
+    md.push(table(['Modelo', 'Error medio (pts/jugador)', 'Sesgo', 'Jugadores'],
+      Object.entries(VARIANTS).map(([v, label]) => {
+        const r = last.variants?.[v] || {};
+        return [label, N(r.mae, 2), isNum(r.bias) ? `${r.bias >= 0 ? '+' : ''}${N(r.bias, 2)}` : '—', r.n ?? 0];
+      })));
+    if (last.lineup) md.push(`\nTu once recomendado: previsto **${N(last.lineup.predicted)}** pts → real **${N(last.lineup.actual)}** pts (capitán ×2; ${last.lineup.known}/${last.lineup.total} jugadores con dato).`);
+    if (last.misses?.length) md.push(`Mayores fallos: ${last.misses.map((m) => `${m.name} (prev. ${N(m.predicted)}, real ${m.actual})`).join(', ')}.`);
+    if (ranked.length) md.push(`Acumulado (${evWeeks.length} jornada/s): el más preciso es **${VARIANTS[ranked[0].variant]}** (error medio ${N(ranked[0].mae, 2)}).`);
+    md.push('_Sesgo positivo = la previsión se pasa; negativo = se queda corta._');
+    md.push('');
+  }
 
   if (upgrades.length) {
     md.push('## ➕ Fichajes (mercado o cláusula) que mejorarían tu once');
@@ -309,7 +344,18 @@ export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], play
     autoMercado: autoMarketLog,
   };
 
-  return { markdown: md.join('\n'), json, counts: { econ: econ.length, clauseSoon: clauseSoon.length, alerts: alerts.length } };
+  json.proteccion = protection.map((p) => ({ jugador: p.name, titular: p.isStarter, xP: p.xp, clausula: p.clause, abierta: p.clauseIsOpen, seAbre: p.clauseOpenAt, puedenPagarla: p.canPay, recomendacion: p.action, motivo: p.reason, subirA: p.targetClause, costeEstimado: p.raiseCost }));
+
+  return {
+    markdown: md.join('\n'),
+    json,
+    counts: { econ: econ.length, clauseSoon: clauseSoon.length, alerts: alerts.length },
+    // Para el trabajo diario: previsión a guardar y cláusulas a vigilar
+    predictionRows: [...squad, ...rivals],
+    lineupIds: lineup.starters.map((p) => p.id),
+    captainId: lineup.captain?.id || null,
+    clauseWatch: clauseSoon.map((r) => ({ id: r.id, name: r.name, owner: r.from, openAt: r.clauseOpenAt, clause: r.clause, xp: r.xp, gainNLaLiga: r.gainNLaLiga })),
+  };
 };
 
 /** Captura compacta del día (histórico local, no se sube a Drive). */

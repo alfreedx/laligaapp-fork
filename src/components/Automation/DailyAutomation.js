@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import { runDailyJob, isRunDue } from '../../services/automation/dailyJob';
 import { loadSettings, loadState } from '../../services/automation/localStore';
+import { checkClauseAlerts } from '../../services/automation/clauseAlerts';
 
 const CHECK_EVERY_MS = 60 * 1000;
 
@@ -40,7 +41,10 @@ const DailyAutomation = () => {
       if (cfg.isDailyRun && !cancelled) await ea.dailyRunFinished(result?.success ? 'ok' : 'error');
     })();
 
-    const timer = setInterval(() => { run('timer'); }, CHECK_EVERY_MS);
+    const timer = setInterval(() => {
+      run('timer');
+      checkClauseAlerts().catch(() => {});
+    }, CHECK_EVERY_MS);
     const unsub = ea?.onRunNow?.(() => { run('scheduler', true); });
 
     return () => {

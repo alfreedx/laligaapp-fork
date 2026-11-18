@@ -17,6 +17,10 @@
 > - 2026-11-18 — Informe: las oportunidades de mercado excluyen jugadores puestos a la venta por otros managers e incluyen los de cláusula abierta o que se abre en ≤ 48 h (precio = cláusula), con calendario de aperturas.
 > - 2026-11-18 — **Inteligencia de rivales**: sobrepuja por manager (valor en la fecha de compra interpolado con el histórico de futbolfantasy), puja sugerida, actividad de 7 días y gasto en subidas de cláusula detectado entre capturas diarias (descontado del dinero estimado).
 > - 2026-11-18 — Rentabilidad: tabla con altura limitada, barra horizontal siempre visible, cabecera y columna de jugador fijas.
+> - 2026-11-19 — **Precisión de la previsión**: se guarda la previsión antes de cada jornada y se compara con los puntos reales (modelo vs solo media vs solo forma, once previsto vs real).
+> - 2026-11-19 — **Protección de la plantilla**: jugadores propios con cláusula abierta o que se abre en ≤ 48 h, rivales que pueden pagarla y recomendación (blindar / subir cláusula con coste razonable / asumible).
+> - 2026-11-19 — **Avisos de apertura de cláusulas** de rivales (notificación de Windows con la app abierta).
+> - 2026-11-19 — Rentabilidad, "Mercado hoy": sin los jugadores propios.
 > - 2026-11-18 — Eliminados los workflows de GitHub Actions del original (release automática), no aplicables a este fork.
 
 ---

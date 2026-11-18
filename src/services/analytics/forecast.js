@@ -56,6 +56,8 @@ export const forecastPoints = (playerMaster, trend = null) => {
     playProb: prob,
     probSource,
     form,
+    seasonAvg: avg,
+    venueFactor: venue,
     nextRival: trend?.nextRival || null,
     nextIsHome: trend?.nextIsHome ?? null,
   };

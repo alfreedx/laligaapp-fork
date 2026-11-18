@@ -296,7 +296,10 @@ const Rentabilidad = () => {
         r.lineupMeta = { formation: lu.formation, total: lu.total, ranking: lu.ranking };
         return r;
       }
-      case 'market': r = buildMarketRows({ ...common, market: a.market, ownerByPlayer: a.ownerByPlayer }); break;
+      case 'market':
+        r = buildMarketRows({ ...common, market: a.market, ownerByPlayer: a.ownerByPlayer })
+          .filter((x) => !a.myTeam || x.sellerId !== a.myTeam.managerId); // sin mis propios jugadores
+        break;
       case 'rivals': r = buildRivalRows({ ...common, teams: a.teams, myTeamId: a.myTeamId }); break;
       case 'money': {
         const stats = buildBidStats({ ledger: a.ledger, trendById: a.trendById });

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { FolderOpen, Play, Bot, FileText, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { FolderOpen, Play, Bot, FileText, AlertTriangle, CheckCircle2, Bell } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import useTeamService from '../../hooks/useTeamService';
 import { fantasyAPI } from '../../services/api';
@@ -129,6 +129,27 @@ const AutomationSettings = () => {
               : <span className="text-green-700 dark:text-green-400 flex items-center gap-1"><CheckCircle2 className="w-4 h-4" /> Último informe: {fmtDate(state.lastSuccessAt)} {state.lastSource ? `(${state.lastSource})` : ''}</span>}
           </div>
         </div>
+      </div>
+
+      {/* Avisos de cláusulas */}
+      <div className="card p-6 space-y-3">
+        <h2 className="text-xl font-bold flex items-center gap-2"><Bell className="w-5 h-5 text-primary-500" /> Avisos de cláusulas</h2>
+        <Toggle
+          checked={settings.clauseAlertsEnabled}
+          onChange={(v) => update({ clauseAlertsEnabled: v })}
+          label="Avisarme cuando se abra la cláusula de un jugador rival"
+          hint="Notificación de Windows en el momento de la apertura, con precio y puntos esperados. Usa la lista del último informe (próximas 48 h). Solo funciona con la app abierta (puede estar minimizada)."
+        />
+        {state.clauseWatch?.length > 0 && (
+          <div className="text-xs text-gray-600 dark:text-gray-300">
+            Próximas aperturas vigiladas:
+            <ul className="list-disc ml-5">
+              {state.clauseWatch.map((w) => (
+                <li key={`${w.id}-${w.openAt}`}>{fmtDate(w.openAt)} — {w.name} ({w.owner}), {fmtM(w.clause)}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* Auto-mercado */}

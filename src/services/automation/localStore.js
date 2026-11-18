@@ -53,6 +53,7 @@ export const DEFAULT_SETTINGS = {
   dailyReportEnabled: true,
   runHour: 19,
   runMinute: 5,
+  clauseAlertsEnabled: true,  // notificar cuando se abre la cláusula de un rival (app abierta)
   autoMarketEnabled: false,   // desactivado hasta que el usuario lo active
   autoMarketDryRun: true,     // simulación: registra lo que haría sin hacerlo
   autoMarketExcluded: [],     // playerMaster ids que nunca se ponen a la venta

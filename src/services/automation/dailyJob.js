@@ -12,6 +12,7 @@ import { runAutoMarket } from './autoMarket';
 import { buildDailyReport, buildSnapshot } from './report';
 import { loadSettings, loadState, saveState, writeJson, readJson, snapshotFile } from './localStore';
 import { clauseRaisesBetween } from '../analytics/rivalIntel';
+import { buildPredictionRecord, actualPointsForWeek, evaluateWeek } from '../analytics/backtest';
 
 export const REPORT_FILE = 'informe-fantasy.md';
 export const DATA_FILE = 'plantilla.json';
@@ -79,7 +80,23 @@ export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual
         });
       }
 
-      const report = buildDailyReport(data, { settings, autoMarketLog, playerNames: data.playerNames, leagueName, clauseSpend });
+      // Evaluar previsiones de jornadas ya terminadas con los puntos reales
+      const predictions = { ...(state.predictions || {}) };
+      const backtests = { ...(state.backtests || {}) };
+      const now = new Date();
+      const closed = (w) => w < data.week || (w === data.week && data.weekInfo?.closingWeekDate && now > new Date(data.weekInfo.closingWeekDate));
+      Object.keys(predictions).map(Number).filter((w) => data.week && closed(w)).forEach((w) => {
+        const actual = actualPointsForWeek(data.teams, w);
+        if (actual.size) backtests[w] = evaluateWeek(predictions[w], actual);
+      });
+
+      const report = buildDailyReport(data, { settings, autoMarketLog, playerNames: data.playerNames, leagueName, clauseSpend, backtests });
+
+      // Guardar la previsión de la jornada mientras no haya empezado (la última antes del inicio cuenta)
+      if (data.week && data.weekInfo?.openingWeekDate && now < new Date(data.weekInfo.openingWeekDate)) {
+        predictions[data.week] = buildPredictionRecord(report.predictionRows, { lineupIds: report.lineupIds, captainId: report.captainId });
+      }
+      const keepLast = (obj, n) => Object.fromEntries(Object.entries(obj).sort((a, b) => Number(b[0]) - Number(a[0])).slice(0, n));
 
       let exportResult = { success: false, error: 'Solo disponible en la app de escritorio' };
       if (ea) {
@@ -100,7 +117,10 @@ export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual
         lastExportDir: exportResult.dir,
         lastAutoMarket: autoMarketLog,
         lastCounts: report.counts,
-        clauseRaises,
+        clauseRaises: keepLast(clauseRaises, 60),
+        predictions: keepLast(predictions, 8),
+        backtests: keepLast(backtests, 20),
+        clauseWatch: report.clauseWatch,
       };
       await saveState(newState);
 
