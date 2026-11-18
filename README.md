@@ -22,6 +22,7 @@
 > - 2026-11-19 — **Avisos de apertura de cláusulas** de rivales (notificación de Windows con la app abierta).
 > - 2026-11-19 — Rentabilidad, "Mercado hoy": sin los jugadores propios.
 > - 2026-11-19 — Mi Alineación: botón **"Cargar recomendada"** que rellena formación y titulares con el once de más puntos esperados (se guarda solo al pulsar Guardar) e indica capitán y entrenador recomendados.
+> - 2026-11-19 — Mi Alineación: **capitán, entrenador y banquillo** (premium) editables y guardados junto a la alineación, con verificación posterior contra la API; "Cargar recomendada" también los rellena.
 > - 2026-11-19 — Informe también en **PDF** (`informe-fantasy.pdf`, A4 horizontal) para leerlo en móvil y PC sin visores especiales; generado en una ventana oculta sin JavaScript ni red.
 > - 2026-11-18 — Eliminados los workflows de GitHub Actions del original (release automática), no aplicables a este fork.
 

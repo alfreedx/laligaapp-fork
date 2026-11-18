@@ -13,6 +13,12 @@ import { useAuthStore } from '../../stores/authStore';
 import LoadingSpinner from '../Common/LoadingSpinner';
 import toast from 'react-hot-toast';
 
+// Banquillo premium: un suplente por línea
+const EMPTY_BENCH = { goalkeeper: null, defender: null, midfield: null, striker: null };
+const BENCH_LINES = [['goalkeeper', 1, 'Portero'], ['defender', 2, 'Defensa'], ['midfield', 3, 'Medio'], ['striker', 4, 'Delantero']];
+const ptId = (p) => (p ? String(p.playerTeamId || p.id) : null);
+const pName = (p) => p?.playerMaster?.nickname || p?.playerMaster?.name || '—';
+
 const LineupEditor = () => {
   const leagueId = useAuthStore((state) => state.leagueId);
   const user = useAuthStore((state) => state.user);
@@ -32,6 +38,13 @@ const LineupEditor = () => {
   const [selectedPosition, setSelectedPosition] = useState(null); // { type: 'goalkeeper'|'defender'|'midfield'|'striker', index: number }
   const [searchTerm, setSearchTerm] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Premium: capitán (playerTeamId), entrenador y banquillo (un suplente por línea)
+  const [captainId, setCaptainId] = useState(null);
+  const [coach, setCoach] = useState(null);
+  const [bench, setBench] = useState(EMPTY_BENCH);
+  const [originalExtras, setOriginalExtras] = useState(null);
+  const [hasPremiumSlots, setHasPremiumSlots] = useState(false);
 
   // Get user's team ID
   const { data: standings } = useQuery({
@@ -129,6 +142,20 @@ const LineupEditor = () => {
 
       setLineup(newLineup);
       setOriginalLineup(JSON.parse(JSON.stringify(newLineup)));
+
+      // Extras premium tal como los devuelve la API (coach: [player], captain: "id", bench: {linea: player})
+      const premium = 'coach' in formation || 'bench' in formation || 'captain' in formation;
+      setHasPremiumSlots(premium);
+      const loadedCoach = Array.isArray(formation.coach) ? formation.coach[0] || null : formation.coach || null;
+      const loadedBench = { ...EMPTY_BENCH };
+      Object.entries(formation.bench || {}).forEach(([line, p]) => {
+        if (line in loadedBench) loadedBench[line] = Array.isArray(p) ? p[0] || null : p || null;
+      });
+      const loadedCaptain = formation.captain ? String(formation.captain) : null;
+      setCoach(loadedCoach);
+      setBench(loadedBench);
+      setCaptainId(loadedCaptain);
+      setOriginalExtras({ coach: loadedCoach, bench: loadedBench, captainId: loadedCaptain });
 
       // Set formation
       const tacticalFormation = formation.tacticalFormation;
@@ -253,9 +280,45 @@ const LineupEditor = () => {
         tactical_formation: formationArray
       };
 
+      // Premium: mismo convenio que los titulares en el PUT (un id por puesto, snake_case).
+      // Formato no documentado → tras guardar se verifica leyendo la alineación de nuevo.
+      if (hasPremiumSlots) {
+        if (coach) lineupData.coach = ptId(coach);
+        if (captainId) lineupData.captain = String(captainId);
+        lineupData.bench = Object.fromEntries(
+          Object.entries(bench).filter(([, p]) => p).map(([line, p]) => [line, ptId(p)])
+        );
+      }
+
       await fantasyAPI.updateLineup(userTeamId, lineupData);
 
-      toast.success('¡Alineación guardada correctamente!');
+      // Verificación: ¿LaLiga ha guardado de verdad cada campo?
+      const problems = [];
+      try {
+        const fresh = await fantasyAPI.getCurrentLineup(userTeamId);
+        const f = (fresh?.data || fresh)?.formation || {};
+        const ids = (v) => (Array.isArray(v) ? v : v ? [v] : []).map(ptId).sort().join(',');
+        const sent = (arr) => arr.map(String).sort().join(',');
+        if (ids(f.goalkeeper) !== sent(lineupData.goalkeeper ? [lineupData.goalkeeper] : [])) problems.push('portero');
+        if (ids(f.defender) !== sent(lineupData.defender)) problems.push('defensas');
+        if (ids(f.midfield) !== sent(lineupData.midfield)) problems.push('medios');
+        if (ids(f.striker) !== sent(lineupData.striker)) problems.push('delanteros');
+        if (hasPremiumSlots) {
+          if (lineupData.coach && ids(f.coach) !== String(lineupData.coach)) problems.push('entrenador');
+          if (lineupData.captain && String(f.captain || '') !== lineupData.captain) problems.push('capitán');
+          Object.entries(lineupData.bench || {}).forEach(([line, id]) => {
+            if (ids(f.bench?.[line]) !== String(id)) problems.push(`banquillo (${line})`);
+          });
+        }
+      } catch (_e) {
+        problems.push('no se pudo comprobar');
+      }
+
+      if (problems.length) {
+        toast.error(`Guardado, pero LaLiga no ha aplicado: ${problems.join(', ')}. Revísalo en la app oficial y dímelo para ajustar el formato.`, { duration: 15000 });
+      } else {
+        toast.success('¡Alineación guardada y verificada (titulares, capitán, entrenador y banquillo)!', { duration: 6000 });
+      }
 
       // Update cache
       queryClient.invalidateQueries({ queryKey: ['currentLineup', userTeamId] });
@@ -264,6 +327,7 @@ const LineupEditor = () => {
       // Update original lineup and formation
       setOriginalLineup(JSON.parse(JSON.stringify(lineup)));
       setOriginalFormation(selectedFormation);
+      setOriginalExtras({ coach, bench, captainId });
     } catch (error) {
       toast.error(error.message || 'Error al guardar la alineación');
     } finally {
@@ -305,6 +369,15 @@ const LineupEditor = () => {
       midfield: byPos(3),
       striker: byPos(4),
     });
+    // Capitán, entrenador y banquillo (mejor suplente por línea según xP)
+    setCaptainId(best.captain ? String(best.captain.id) : null);
+    if (best.coach) setCoach(best.coach.pt);
+    const nextBench = { ...EMPTY_BENCH };
+    BENCH_LINES.forEach(([line, posId]) => {
+      const sub = best.bench.find((p) => p.positionId === posId);
+      nextBench[line] = sub ? sub.pt : null;
+    });
+    setBench(nextBench);
     setRecommendation({
       formation: best.formation,
       total: best.total,
@@ -323,6 +396,11 @@ const LineupEditor = () => {
       if (originalFormation) {
         setSelectedFormation(originalFormation);
       }
+      if (originalExtras) {
+        setCoach(originalExtras.coach);
+        setBench(originalExtras.bench);
+        setCaptainId(originalExtras.captainId);
+      }
       toast.success('Cambios revertidos');
     }
   };
@@ -332,8 +410,34 @@ const LineupEditor = () => {
     if (!originalLineup) return false;
     const lineupChanged = JSON.stringify(lineup) !== JSON.stringify(originalLineup);
     const formationChanged = selectedFormation !== originalFormation;
-    return lineupChanged || formationChanged;
-  }, [lineup, originalLineup, selectedFormation, originalFormation]);
+    const extrasChanged = !!originalExtras && (
+      ptId(coach) !== ptId(originalExtras.coach) ||
+      captainId !== originalExtras.captainId ||
+      Object.keys(EMPTY_BENCH).some((k) => ptId(bench[k]) !== ptId(originalExtras.bench[k]))
+    );
+    return lineupChanged || formationChanged || extrasChanged;
+  }, [lineup, originalLineup, selectedFormation, originalFormation, coach, captainId, bench, originalExtras]);
+
+  // Titulares actuales (para elegir capitán) y jugadores fuera del once (banquillo)
+  const starters = React.useMemo(
+    () => [lineup.goalkeeper, ...lineup.defender, ...lineup.midfield, ...lineup.striker].filter(Boolean),
+    [lineup]
+  );
+  const starterIds = React.useMemo(() => new Set(starters.map(ptId)), [starters]);
+  const coaches = React.useMemo(() => teamPlayers.filter((pt) => pt.playerMaster?.positionId === 5), [teamPlayers]);
+
+  // Coherencia: el capitán debe ser titular; un titular no puede estar en el banquillo
+  useEffect(() => {
+    if (captainId && !starterIds.has(String(captainId))) setCaptainId(null);
+    setBench((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      Object.keys(next).forEach((k) => {
+        if (next[k] && starterIds.has(ptId(next[k]))) { next[k] = null; changed = true; }
+      });
+      return changed ? next : prev;
+    });
+  }, [starterIds, captainId]);
 
   // Filter players by position and search
   const getAvailablePlayersByPosition = (positionId) => {
@@ -449,7 +553,7 @@ const LineupEditor = () => {
               {hasChanges ? ' Pulsa Guardar para aplicarla.' : ''}
             </div>
             <div>
-              Pon como <b>capitán a {recommendation.captain || '—'}</b> y como <b>entrenador a {recommendation.coach || '—'}</b> (se eligen en la app oficial).
+              Capitán: <b>{recommendation.captain || '—'}</b> · Entrenador: <b>{recommendation.coach || '—'}</b> · Banquillo: el mejor suplente de cada línea (puedes cambiarlos abajo).
             </div>
             {recommendation.doubtful.length > 0 && (
               <div className="text-amber-700 dark:text-amber-400">⚠️ Titulares con probabilidad &lt; 60 %: {recommendation.doubtful.join(', ')} — revisa los onces probables antes del cierre.</div>
@@ -603,6 +707,53 @@ const LineupEditor = () => {
           )}
         </div>
       </div>
+
+      {/* Capitán, entrenador y banquillo (premium) */}
+      {hasPremiumSlots && (
+        <div className="card p-4 space-y-3">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Capitán, entrenador y banquillo</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+            <label className="flex flex-col gap-1">
+              <span className="font-medium">© Capitán (puntos ×2)</span>
+              <select className="input-field !py-1.5" value={captainId || ''} onChange={(e) => setCaptainId(e.target.value || null)}>
+                <option value="">— Sin capitán —</option>
+                {starters.map((p) => <option key={ptId(p)} value={ptId(p)}>{pName(p)}</option>)}
+              </select>
+              {!captainId && <span className="text-xs text-amber-600">⚠️ Sin capitán pierdes el ×2.</span>}
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="font-medium">🧑‍💼 Entrenador</span>
+              <select
+                className="input-field !py-1.5"
+                value={ptId(coach) || ''}
+                onChange={(e) => setCoach(coaches.find((c) => ptId(c) === e.target.value) || null)}
+              >
+                <option value="">— Sin entrenador —</option>
+                {coaches.map((c) => <option key={ptId(c)} value={ptId(c)}>{pName(c)}</option>)}
+              </select>
+            </label>
+            {BENCH_LINES.map(([line, posId, label]) => {
+              const options = teamPlayers.filter((pt) => pt.playerMaster?.positionId === posId && !starterIds.has(ptId(pt)));
+              return (
+                <label key={line} className="flex flex-col gap-1">
+                  <span className="font-medium">🪑 Banquillo — {label}</span>
+                  <select
+                    className="input-field !py-1.5"
+                    value={ptId(bench[line]) || ''}
+                    onChange={(e) => setBench((b) => ({ ...b, [line]: options.find((o) => ptId(o) === e.target.value) || null }))}
+                  >
+                    <option value="">— Vacío —</option>
+                    {options.map((o) => <option key={ptId(o)} value={ptId(o)}>{pName(o)}</option>)}
+                  </select>
+                </label>
+              );
+            })}
+          </div>
+          <p className="text-xs text-gray-500">
+            Se guardan junto con la alineación al pulsar <b>Guardar</b>. Después la app comprueba en LaLiga que se ha aplicado todo y te avisa si algo no se guardó.
+          </p>
+        </div>
+      )}
 
       {/* Field Visualization */}
       {formationReq && (
