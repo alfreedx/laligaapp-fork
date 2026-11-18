@@ -3,7 +3,7 @@
 [![Basado en LaLigaApp](https://img.shields.io/badge/basado%20en-LaLigaApp%203.5.7-1f6feb)](https://github.com/Externoak/LaLigaApp)
 ![Licencia: GPL-3.0-or-later](https://img.shields.io/badge/licencia-GPL--3.0--or--later-blue)
 ![Plataforma: Windows · Electron](https://img.shields.io/badge/plataforma-Windows%20%C2%B7%20Electron-orange)
-![Tests](https://img.shields.io/badge/tests-Jest-success)
+[![CI](https://github.com/alfreedx/laligaapp-fork/actions/workflows/ci.yml/badge.svg)](https://github.com/alfreedx/laligaapp-fork/actions/workflows/ci.yml)
 
 Fork personal de **[LaLigaApp](https://github.com/Externoak/LaLigaApp)** (app de escritorio no oficial de LaLiga Fantasy) que añade **análisis de rentabilidad**, **previsión de puntos**, **inteligencia sobre los rivales** y un **informe diario automático** pensado para tomar mejores decisiones de mercado y alineación.
 
