@@ -2,8 +2,18 @@
   "license": "GPL-3.0-or-later",
   "name": "laliga-fantasy-app",
   "version": "3.5.7",
-  "description": "LaLiga Fantasy Application",
+  "description": "LaLiga Fantasy (fork de LaLigaApp): rentabilidad, previsión de puntos, rivales e informe diario automático",
   "author": "Externoak",
+  "contributors": [
+    "alfreedx (fork)"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alfreedx/laligaapp-fork.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alfreedx/laligaapp-fork/issues"
+  },
   "private": true,
   "engines": {
     "node": ">=18"
@@ -38,7 +48,9 @@
     "electron:dist": "npm run build && electron-builder --publish=never",
     "build:electron": "npm run build && electron-builder --publish=never",
     "build:full": "npm run build && electron-builder --win --publish=never",
-    "analyze": "npm run build && npx webpack-bundle-analyzer build/static/js/*.js --mode json --report bundle-report.json"
+    "analyze": "npm run build && npx webpack-bundle-analyzer build/static/js/*.js --mode json --report bundle-report.json",
+    "lint": "eslint src electron server main.js preload.js --max-warnings=0",
+    "test:ci": "craco test --watchAll=false"
   },
   "devDependencies": {
     "@craco/craco": "^7.1.0",

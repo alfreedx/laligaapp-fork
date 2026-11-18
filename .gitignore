@@ -228,6 +228,14 @@ yarn.lock
 .claude.json
 
 # Markdown files (except README files)
-*.md
-!README.md
-!README_EN.md
+# Notas locales en Markdown fuera del repositorio; se versiona la documentación del proyecto
+/*.md
+!/README.md
+!/CHANGELOG.md
+!/CONTRIBUTING.md
+!/SECURITY.md
+
+# Datos personales que la app genera fuera del repo (por si se copian aquí por error)
+informe-fantasy.*
+plantilla.json
+fantasy-data/

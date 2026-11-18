@@ -1,398 +1,150 @@
-# LaLiga Fantasy App
+# LaLiga Fantasy · Analítica y automatización
 
-> 🔀 **Versión modificada (fork) de LaLigaApp.**
-> Este producto incluye **"LaLigaApp" (c) 2025–presente Externoak** — https://github.com/Externoak/LaLigaApp/
-> Modificaciones (c) 2026 alfreedx, distribuidas bajo la misma licencia **GPL-3.0-or-later con Términos Adicionales — Atribución (GPLv3 §7)**. Ver [LICENSE](./LICENSE) y [NOTICE](./NOTICE).
-> Esta atribución no implica respaldo ni patrocinio por parte de los autores originales. Proyecto no oficial, sin relación con LaLiga Fantasy ni con futbolfantasy.com.
->
-> **Cambios respecto al original** (GPLv3 §5a):
-> - 2026-11-18 — Actualización automática desde el repositorio original desactivada (evita sobrescribir las modificaciones); se mantiene el aviso de nueva versión.
-> - 2026-11-18 — Captura opcional de respuestas de la API para depuración en el servidor local (solo con la variable `API_CAPTURE_DIR`; nunca guarda cabeceras ni tokens).
-> - 2026-11-18 — Aviso de versión modificada en la interfaz.
-> - 2026-11-18 — Nueva sección **Rentabilidad**: precio de compra de todos los jugadores de la liga reconstruido desde la actividad, ganancia latente/efectiva, oferta LaLiga +10 %, proyección a N días, oportunidades de cláusula y dinero estimado de los rivales. El lector de futbolfantasy guarda además el histórico de valor (1/2/3/7/14/30 días).
-> - 2026-11-18 — **Informe diario automático** (`informe-fantasy.md` + `plantilla.json`) tras el reseteo del mercado: avisos, ofertas recibidas con ganancia si aceptas, oportunidades de mercado (económicas y deportivas), cláusulas que se abren en 48 h, dinero de rivales. Captura local diaria de valores. Modo `--daily-run` para el Programador de tareas de Windows e instancia única.
-> - 2026-11-18 — **Auto-mercado** opcional (desactivado y en simulación por defecto): pone a la venta a valor de mercado los jugadores propios que no estén en el mercado. Nunca acepta ofertas ni puja.
-> - 2026-11-18 — Página de **Ajustes** con la configuración de la automatización.
-> - 2026-11-18 — **Previsión de puntos (xP)** por jugador (media, forma, casa/fuera, probabilidad de jugar de futbolfantasy), **once y capitán recomendados** con formaciones estándar y premium, y fichajes del mercado que mejorarían el once. En la página Rentabilidad (pestaña "Once") y en el informe diario.
-> - 2026-11-18 — Informe: las oportunidades de mercado excluyen jugadores puestos a la venta por otros managers e incluyen los de cláusula abierta o que se abre en ≤ 48 h (precio = cláusula), con calendario de aperturas.
-> - 2026-11-18 — **Inteligencia de rivales**: sobrepuja por manager (valor en la fecha de compra interpolado con el histórico de futbolfantasy), puja sugerida, actividad de 7 días y gasto en subidas de cláusula detectado entre capturas diarias (descontado del dinero estimado).
-> - 2026-11-18 — Rentabilidad: tabla con altura limitada, barra horizontal siempre visible, cabecera y columna de jugador fijas.
-> - 2026-11-19 — **Precisión de la previsión**: se guarda la previsión antes de cada jornada y se compara con los puntos reales (modelo vs solo media vs solo forma, once previsto vs real).
-> - 2026-11-19 — **Protección de la plantilla**: jugadores propios con cláusula abierta o que se abre en ≤ 48 h, rivales que pueden pagarla y recomendación (blindar / subir cláusula con coste razonable / asumible).
-> - 2026-11-19 — **Avisos de apertura de cláusulas** de rivales (notificación de Windows con la app abierta).
-> - 2026-11-19 — Rentabilidad, "Mercado hoy": sin los jugadores propios.
-> - 2026-11-19 — Mi Alineación: botón **"Cargar recomendada"** que rellena formación y titulares con el once de más puntos esperados (se guarda solo al pulsar Guardar) e indica capitán y entrenador recomendados.
-> - 2026-11-19 — Mi Alineación: **capitán, entrenador y banquillo** (premium) editables y guardados junto a la alineación, con verificación posterior contra la API; "Cargar recomendada" también los rellena.
-> - 2026-11-19 — **Informe rediseñado**: cifras clave, "Qué hacer hoy" priorizado, once dibujado en un campo, tablas reducidas a lo esencial, PDF en A4 vertical. Las ganancias de mercado descuentan la sobrepuja típica de la liga y solo se proponen fichajes asumibles con el saldo (o aceptando ofertas con ganancia).
-> - 2026-11-19 — Informe también en **PDF** (`informe-fantasy.pdf`, A4 horizontal) para leerlo en móvil y PC sin visores especiales; generado en una ventana oculta sin JavaScript ni red.
-> - 2026-11-18 — Eliminados los workflows de GitHub Actions del original (release automática), no aplicables a este fork.
+[![Basado en LaLigaApp](https://img.shields.io/badge/basado%20en-LaLigaApp%203.5.7-1f6feb)](https://github.com/Externoak/LaLigaApp)
+![Licencia: GPL-3.0-or-later](https://img.shields.io/badge/licencia-GPL--3.0--or--later-blue)
+![Plataforma: Windows · Electron](https://img.shields.io/badge/plataforma-Windows%20%C2%B7%20Electron-orange)
+![Tests](https://img.shields.io/badge/tests-Jest-success)
+
+Fork personal de **[LaLigaApp](https://github.com/Externoak/LaLigaApp)** (app de escritorio no oficial de LaLiga Fantasy) que añade **análisis de rentabilidad**, **previsión de puntos**, **inteligencia sobre los rivales** y un **informe diario automático** pensado para tomar mejores decisiones de mercado y alineación.
+
+> ⚠️ **Proyecto no oficial.** No está afiliado con LaLiga, LaLiga Fantasy ni futbolfantasy.com. La API de LaLiga Fantasy no es pública: úsala con moderación y bajo tu responsabilidad.
+
+<p align="center">
+  <img src="docs/img/informe-ejemplo.png" alt="Informe diario de ejemplo (datos ficticios)" width="560">
+  <br><sub>Informe diario en PDF (datos ficticios)</sub>
+</p>
 
 ---
 
-[![Version](https://img.shields.io/badge/version-3.5.7-green.svg)](https://github.com/Externoak/LaLigaApp)
-[![React](https://img.shields.io/badge/React-18.2.0-blue.svg)](https://reactjs.org/)
-![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
-[![Platform](https://img.shields.io/badge/platform-Web%20%7C%20Electron%20-orange.svg)](#plataformas)
-![Status](https://github.com/Externoak/LaLigaApp/actions/workflows/release.yml/badge.svg)
-
-**🌐 Language / Idioma:** [🇪🇸 Español](README.md) | [en English](README_EN.md)
-
-> ⚠️ **Nota**: La aplicación solo está disponible en español. Solo la documentación está traducida al inglés.
-> 
-> ⚠️ **Aviso legal**: Proyecto **no oficial**. No está afiliado con LaLiga Fantasy ni con futbolfantasy.com.  
-
-> Una plataforma integral de gestión de La Liga Fantasy con información extra de mercado y onces probables de https://www.futbolfantasy.com/
-
-⭐ **¿Te ha ayudado a cazar el chollo de la jornada?** Una [estrella en GitHub](https://github.com/Externoak/LaLigaApp) es el mejor fichaje que puedes hacerle al proyecto: gratis y sin cláusula de rescisión.
-
-##  Cómo usar la aplicación
-
-### Descarga y instalación rápida
-
-1. **Descargar**: Ve a [Releases](https://github.com/Externoak/LaLigaApp/releases) y descarga la última versión
-2. **Descomprimir**: Extrae el archivo ZIP descargado
-3. **Ejecutar**: Haz doble clic en el archivo `.exe` proporcionado
-
-¡Listo! No requiere instalación adicional.
-
-##  Descripción general
-
-LaLiga Fantasy Web es una aplicación rica en funciones para gestionar tus equipos de LaLiga Fantasy. Construida con tecnologías web modernas, proporciona una interfaz intuitiva para la gestión de equipos, comercio de jugadores, análisis de mercado y seguimiento de ligas en tiempo real.
-
-### 💡 ¿Por qué esta aplicación?
-
-La Liga Fantasy oficial solo tiene aplicación móvil, dejando a los usuarios de PC sin una experiencia nativa optimizada. Esta aplicación llena ese vacío ofreciendo:
-
-- **Interfaz optimizada para PC**: Aprovecha pantallas grandes y navegación con teclado/ratón
-- **Información adicional**: Datos de mercado y onces probables no disponibles en la app oficial
-- **Experiencia mejorada**: Funciones adicionales para una gestión más eficiente de tu equipo
-
-Imagen del menu principal:
-
-<img src="docs/LaLigaAppMainPage.png">
-
-
-## 🔐 Privacidad y Seguridad
-
-**🛡️ Tus datos están completamente seguros:**
-
-- **Sin servidores propios / datos de sesión locales**: Preferencias y sesión se guardan localmente en tu dispositivo; nunca salen de él
-- **Sin telemetría**: No enviamos ningún dato personal a servidores externos
-- **Sin rastreo**: La aplicación no rastrea tu actividad ni uso
-- **Sin análisis**: No recopilamos estadísticas de uso ni información personal
-- **Código abierto**: Puedes revisar el código fuente para verificar nuestra transparencia
-- **Tokens y OAuth**: Los tokens OAuth (Azure B2C/Google) se almacenan localmente y solo se envían a los endpoints del proveedor para iniciar y refrescar sesión.
-- **Borrado de datos**: Desde "Cerrar sesión" se eliminan tokens y datos locales de sesión.
-
-La aplicación solo se conecta a la API oficial de LaLiga Fantasy para obtener datos públicos del juego y de tu liga y también utiliza datos de https://www.futbolfantasy.com para leer datos de tendencias del mercado y onces probables. Nunca enviamos tus credenciales, configuraciones personales o datos de navegación a terceros.
-
-### ✨ Características principales
-
-- 🔐 **Autenticación segura** - Integración OAuth2 con el tenant B2C de LaLiga
-- 📊 **Dashboard en tiempo real** - Clasificaciones en vivo, estadísticas de equipos y tendencias del mercado
-- 🔍 **Búsqueda avanzada** - Búsqueda global entre jugadores, equipos y managers
-- 💰 **Gestión de mercado** - Comercio de jugadores, pujas y análisis de mercado
-- 📱 **Multiplataforma** - Web, Electron desktop
-- 🌙 **Modo oscuro/claro** - Tema personalizable con detección de preferencia del sistema
-- 🔄 **Auto-actualizaciones** - Actualizaciones seamless de la aplicación para versiones de escritorio
-- 📈 **Tendencias del mercado** - Análisis del mercado en tiempo real y valoraciones de jugadores
-
-## 📊 Origen y uso de datos
-
-- La app obtiene datos directamente desde el dispositivo del usuario hacia los servicios de terceros.
-- No operamos servidores propios ni redistribuimos datos o contenido de terceros.
-- No almacenamos de forma persistente ni reempaquetamos contenidos de terceros para su descarga.
-- Respetamos cabeceras y límites de uso.
-
-## 📋 Términos de terceros
-
-Esta aplicación accede a servicios de terceros (p. ej., LaLiga Fantasy y futbolfantasy.com). El uso de dichos servicios está sujeto a sus Términos y Políticas.
-El proyecto no fomenta ni permite eludir medidas técnicas, scraping prohibido ni usos contrarios a dichos términos.
-
-## 🚀 Inicio rápido para desarrolladores
-
-### Requisitos previos
-
-- **Node.js** 18.0.0 o superior (CI y Docker usan Node 20)
-- **npm** 7.0.0 o superior
-- **Git** para clonar el repositorio
-
-### Instalación
-
-1. **Clonar el repositorio**
-   ```bash
-   git clone https://github.com/Externoak/LaLigaApp.git
-   cd LaLigaApp
-   ```
-
-2. **Instalar dependencias**
-   ```bash
-   npm install
-   ```
-
-3. **Iniciar servidor de desarrollo**
-   ```bash
-   npm run dev
-   ```
-
-   Esto iniciará un servidor unificado en el puerto 3005 que incluye:
-   - Servidor web con la aplicación React
-   - Servidor proxy CORS para la API de LaLiga Fantasy
-
-4. **Abrir navegador**
-   Navega a `http://localhost:3005` para acceder a la aplicación
-
-   **📱 Acceso desde el móvil**: con la app abierta en el PC, cualquier dispositivo de la misma red Wi-Fi puede usarla en la URL de red local, que aparece en la barra lateral como «Acceso Web» (ej: `http://192.168.x.x:3005`). Para entrar sin escribir nada, inicia sesión en el PC, pulsa **«Conectar móvil»** en la barra lateral y escanea el QR con la cámara del móvil: entrarás con tu sesión y tu liga. El código caduca en 2 minutos y solo sirve una vez. La interfaz está optimizada para móviles.
-
-## 🖥️ Plataformas
-
-### Aplicación Web
-```bash
-npm start          # Servidor de desarrollo
-npm run build      # Build de producción
-```
-
-### App de Escritorio Electron
-```bash
-npm run electron:dev    # Modo desarrollo
-npm run electron        # Build y ejecutar
-npm run build:electron  # Empaquetar para distribución
-```
-
-## Docker
-
-### Prerequisitos
-- Docker
-- Docker Compose
-
-### Inicio rápido
-
-```bash
-docker-compose up --build
-```
-
-Acceso
-
-- Frontend: http://localhost:8080
-- Backend API: http://localhost:8080/api
-
-Build manual de imágenes
-
-```bash
-docker build -t laligaapp-backend:latest -f docker/Dockerfile.backend .
-docker build -t laligaapp-frontend:latest -f docker/Dockerfile.frontend .
-```
-
-Variables de entorno
-
-Backend:
-- APP_PORT - Puerto del servidor (default: 3005)
-
-## 🏗️ Estructura del proyecto
-
-```
-LaLigaApp/
-├── public/                 # Assets estáticos y service workers
-├── src/
-│   ├── components/        # Componentes React
-│   │   ├── Auth/         # Componentes de autenticación
-│   │   ├── Common/       # Componentes reutilizables
-│   │   ├── Dashboard/    # Widgets del dashboard
-│   │   ├── Layout/       # Layout de la aplicación
-│   │   ├── Market/       # Mercado y comercio
-│   │   ├── Players/      # Gestión de jugadores
-│   │   ├── Teams/        # Gestión de equipos
-│   │   └── Settings/     # Configuraciones de la aplicación
-│   ├── services/         # API y lógica de negocio
-│   ├── stores/           # Gestión de estado (Zustand)
-│   ├── styles/           # Estilos globales y Tailwind
-│   └── utils/            # Funciones de utilidad
-├── server/                # Servidor unificado (estáticos + proxy CORS de desarrollo)
-├── electron/              # Módulos del proceso principal de Electron
-├── scripts/              # Scripts de build y despliegue
-├── main.js               # Bootstrap del proceso principal de Electron
-├── preload.js            # Script de preload de Electron
-└── tailwind.config.js    # Configuración de Tailwind CSS
-```
-
-## 🛠️ Tecnologías principales
-
-### Frontend
-- **[React 18](https://reactjs.org/)** - Biblioteca de UI basada en componentes
-- **[React Router v6](https://reactrouter.com/)** - Enrutamiento del lado cliente
-- **[Tailwind CSS](https://tailwindcss.com/)** - Framework CSS utility-first
-- **Animaciones ligeras** - Shim propio (`motionShim`), sin librería de animación externa
-- **[React Query](https://tanstack.com/query/)** - Obtención de datos y caché
-
-### Gestión de estado
-- **[Zustand](https://zustand-demo.pmnd.rs/)** - Gestión de estado ligera
-- Almacenamiento persistente para autenticación y preferencias
-- Actualizaciones en tiempo real y sincronización
-
-### Herramientas de build
-- **[Create React App](https://create-react-app.dev/)** - Herramientas de desarrollo y build
-- **[Electron](https://www.electronjs.org/)** - Framework de aplicaciones de escritorio
-
-## 🔧 Desarrollo
-
-### Scripts disponibles
-
-| Comando | Descripción |
-|---------|-------------|
-| `npm start` | Iniciar servidor de desarrollo React |
-| `npm run build` | Build para producción |
-| `npm test` | Ejecutar suite de pruebas |
-| `npm run dev` | Iniciar entorno de desarrollo con proxy |
-| `npm run server` | Iniciar solo el servidor proxy CORS |
-| `npm run electron:dev` | Ejecutar Electron en modo desarrollo |
-
-### Configuración del entorno
-
-La aplicación usa un servidor unificado que sirve tanto la aplicación React como el proxy CORS:
-
-- **Servidor Unificado**: `http://localhost:3005`
-- **Target API**: `https://fantasy-api.llt-services.com`
-
-### Autenticación
-
-La app usa OAuth2 con el tenant Azure B2C de LaLiga:
-- **Inicio de sesión con LaLiga en un clic** (app de escritorio): abre la ventana oficial de LaLiga (email/contraseña o Google) y la app captura tu sesión automáticamente — sin copiar el token a mano
-- Inicio de sesión directo con email/contraseña
-- **Conectar móvil**: comparte la sesión del PC con el móvil escaneando un QR
-- Método manual (pegar el token) para el navegador de un PC
-- Gestión de tokens JWT con refresco automático
-- Almacenamiento persistente de sesión
-
-## 🎨 Personalización
-
-### Temas
-
-La aplicación soporta temas comprehensivos a través de Tailwind CSS:
-
-```javascript
-// tailwind.config.js
-module.exports = {
-  theme: {
-    extend: {
-      colors: {
-        primary: {
-          // Paleta verde personalizada
-          50: '#f0f9f0',
-          500: '#2d7d2d',
-          900: '#123412',
-        },
-        dark: {
-          // Colores modo oscuro
-          bg: '#0f172a',
-          card: '#1e293b',
-          border: '#334155',
-        }
-      }
-    }
-  }
-}
-```
-
-### Estructura de componentes
-
-Todos los componentes siguen un patrón consistente:
-- Componentes funcionales con hooks
-- Listo para TypeScript (comentarios JSDoc)
-- Diseño responsivo con enfoque mobile-first
-- Consideraciones de accesibilidad (etiquetas ARIA)
-
-## 🔐 Seguridad
-
-- **Seguridad de tokens**: Tokens JWT almacenados de forma segura con refresco automático
-- **Protección CORS**: El servidor proxy valida orígenes
-- **Validación de entrada**: Validación del lado cliente y servidor
-- **Privacidad de datos**: No se registran datos sensibles en producción
-- **Comunicación segura**: Aplicación de HTTPS para llamadas a API
-
-## 📦 Build para producción
-
-### Despliegue Web
-```bash
-npm run build
-# Despliega el directorio 'build' a tu servidor web
-```
-
-### Distribución Electron
-```bash
-npm run build:electron
-# App empaquetada disponible en el directorio 'dist'
-```
-
-## 🤝 Contribuir
-
-¡Damos la bienvenida a las contribuciones!
-
-### Flujo de trabajo de desarrollo
-
-1. Hacer fork del repositorio
-2. Crear una rama de feature (`git checkout -b feature/amazing-feature`)
-3. Commit tus cambios (`git commit -m 'Add amazing feature'`)
-4. Push a la rama (`git push origin feature/amazing-feature`)
-5. Abrir un Pull Request
-
-### Estándares de código
-
-- Usar la configuración de ESLint proporcionada
-- Seguir patrones de componentes funcionales de React
-- Escribir mensajes de commit significativos
-- Agregar comentarios JSDoc para funciones complejas
-- Asegurar compatibilidad de diseño responsivo
-
-## 🐛 Solución de problemas
-
-### Problemas comunes
-
-**Errores de build**
-```bash
-# Limpiar caché y reinstalar
-rm -rf node_modules package-lock.json
+## Índice
+
+- [Funcionalidades](#funcionalidades)
+- [Instalación](#instalación)
+- [Uso](#uso)
+- [Automatización diaria](#automatización-diaria)
+- [Desarrollo](#desarrollo)
+- [Estructura del proyecto](#estructura-del-proyecto)
+- [Seguridad y privacidad](#seguridad-y-privacidad)
+- [Documentación](#documentación)
+- [Créditos y licencia](#créditos-y-licencia)
+
+## Funcionalidades
+
+Además de todo lo que ya ofrece LaLigaApp (mercado, plantillas, cláusulas, actividad, onces probables… ver [README original](docs/upstream/README.md)), este fork añade:
+
+| Área | Qué aporta |
+|---|---|
+| 📈 **Rentabilidad** | Precio de compra de **todos** los jugadores de la liga reconstruido desde la actividad; ganancia latente y efectiva; mejor oferta posible de LaLiga (+10 %); proyección del valor a N días con el histórico de futbolfantasy; exportación a CSV. Pestañas: mi equipo, once, mercado, rivales, dinero de rivales y mis ventas. |
+| 🧠 **Previsión y alineación** | Puntos esperados (xP) por jugador según media, forma, casa/fuera y probabilidad de jugar. Once óptimo con formaciones estándar y premium, **capitán, entrenador y banquillo**; botón *Cargar recomendada* en Mi Alineación con verificación tras guardar. |
+| 🕵️ **Rivales** | Dinero estimado de cada manager, sobrepuja habitual en las pujas, actividad reciente y subidas de cláusula detectadas entre capturas diarias. |
+| 🛡️ **Protección** | Jugadores propios expuestos a cláusula, qué rivales pueden pagarla y si conviene blindar o subir la cláusula. |
+| 📄 **Informe diario** | Tras el reseteo del mercado: *Qué hacer hoy*, once recomendado, ofertas con ganancia, oportunidades económicas y deportivas (mercado + cláusulas que se abren en 48 h), plantilla y rivales. Se genera en **PDF** (móvil y PC), **Markdown** y **JSON** en la carpeta que elijas (p. ej. Google Drive). |
+| 🔔 **Avisos** | Notificación de Windows cuando se abre la cláusula de un jugador rival. |
+| 🤖 **Auto-mercado** *(opcional)* | Vuelve a poner a la venta tus jugadores a valor de mercado para recibir la oferta diaria de LaLiga. Desactivado y en modo simulación por defecto; **nunca acepta ofertas ni puja**. |
+| 📏 **Precisión** | Guarda la previsión antes de cada jornada y la compara con los puntos reales. |
+
+## Instalación
+
+Requisitos: **Windows 10/11**, **Node.js 18+** (probado con Node 26) y **git**.
+
+```powershell
+git clone https://github.com/alfreedx/laligaapp-fork.git
+cd laligaapp-fork
 npm install
 ```
 
-## 📝 Licencia
+> Con npm 11+ los scripts de instalación de dependencias requieren aprobación. Electron necesita descargar su binario: `npm install-scripts approve electron` (ya incluido en `package.json` → `allowScripts`).
 
-Este proyecto se distribuye bajo **GPL-3.0-or-later** con **Términos Adicionales — Atribución (GPLv3 §7)**.  
-Consulta **[LICENSE](./LICENSE)** y **[NOTICE](./NOTICE)** para el texto completo.
+### Ejecutable de escritorio
 
-### ✅ Resumen de atribución (obligatorio)
-Si redistribuyes este proyecto o creas trabajos derivados, incluye una **mención visible** al proyecto original **de una de estas formas**:
+```powershell
+npm run build:electron                              # genera dist/LaLiga-Fantasy-App/win-unpacked
+powershell -ExecutionPolicy Bypass -File scripts/install-local.ps1   # copia a %LOCALAPPDATA%\Programs\LaLigaFantasyFork
+```
 
-- **Documentación** (README, manual o sitio web del proyecto), **o**
-- **Interfaz de usuario** (por ejemplo, "About/Acerca de", "Créditos" o pantalla de inicio).
+Abre `LaLiga Fantasy App.exe` desde esa carpeta e inicia sesión con tu cuenta de LaLiga Fantasy.
 
-**Texto recomendado de crédito:**
-> Este producto incluye 'LaLigaApp' (c) 2025–presente Externoak — https://github.com/Externoak/LaLigaApp/
+## Uso
 
-## Idiomas
-- **Español** (principal)
-- **Inglés** - Ver [README_EN.md](README_EN.md)
+| Sección | Para qué |
+|---|---|
+| **Rentabilidad** | Tablas ordenables con las métricas económicas y deportivas; elige el ritmo de proyección (último día / media 3 / media 7 días) y el horizonte. |
+| **Mi Alineación** | *Cargar recomendada* rellena formación, titulares, capitán, entrenador y banquillo; revisa y pulsa *Guardar*. |
+| **Ajustes y automatización** | Carpeta del informe, hora, *Generar informe ahora*, avisos de cláusulas y auto-mercado (con lista de exclusión). |
 
-## 🎓 Propósito educativo
+Glosario rápido: **xP** = puntos esperados la próxima jornada · **LaLiga** = mejor oferta posible de LaLiga (valor +10 %) · **sobrepuja** = cuánto se paga por encima del valor para ganar una puja.
 
-Esta aplicación fue creada con **fines educativos y de aprendizaje**, utilizando tecnologías modernas como React, Electron y web scraping. Es un proyecto de **semi-vibecoding sin ánimo de lucro** para explorar el desarrollo con AI, aplicaciones de escritorio y APIs.
+## Automatización diaria
 
-**Objetivos del proyecto:**
-- Aprender desarrollo con Electron y React
-- Experimentar con integración de APIs
-- Practicar técnicas de web scraping
-- Crear herramientas útiles para la comunidad fantasy
+El trabajo diario se ejecuta **tras el reseteo del mercado (19:05 por defecto)**:
 
-## 📞 Soporte
+1. Descarga datos frescos (plantillas, mercado, actividad completa, ofertas, futbolfantasy).
+2. Guarda una captura local del día (histórico propio; no se sube a ningún sitio).
+3. Ejecuta el auto-mercado si está activado.
+4. Escribe `informe-fantasy.pdf`, `informe-fantasy.md` y `plantilla.json` en la carpeta configurada (sobrescribe los del día anterior).
+5. Muestra una notificación.
 
-- **Issues**: [GitHub Issues](https://github.com/Externoak/LaLigaApp/issues)
+Si a esa hora la app no estaba abierta, el trabajo se ejecuta en cuanto la abras. Para que funcione con el portátil en suspensión, registra la tarea programada:
 
----
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/register-task.ps1   # 19:05, despierta el equipo
+```
 
-> ⚖️ **Aviso legal**: Esta es una aplicación no oficial que utiliza APIs NO públicas.  
-> No está afiliada con LaLiga Fantasy ni futbolfantasy.com.  
-> ⚠️ Úsala bajo tu propio riesgo.
+Detalles en [docs/AUTOMATIZACION.md](docs/AUTOMATIZACION.md).
 
-<div align="center">
-  <p>Hecho con ❤️ por <strong>Externoak</strong></p>
-  <p><em>Aplicación no oficial para LaLiga Fantasy</em></p>
-</div>
+## Desarrollo
+
+```powershell
+npm run electron:dev   # servidor proxy (3005) + React (3006) + Electron
+npm run dev            # versión web: http://localhost:3006
+npm test               # tests (Jest) en modo watch
+npm run test:ci        # tests una vez, como en CI
+npm run lint           # ESLint sin avisos permitidos
+```
+
+La lógica de análisis está en funciones puras con tests (`src/services/analytics`, `src/services/automation`). Más en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) y [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Estructura del proyecto
+
+```
+electron/                 proceso principal: IPC, actualizaciones, automatización (PDF, notificaciones, --daily-run)
+server/                   proxy local hacia la API de LaLiga Fantasy y futbolfantasy.com
+src/
+  components/
+    Rentabilidad/         página de análisis
+    Automation/           vigilante del trabajo diario y avisos
+    Settings/             ajustes de automatización
+    Teams/LineupEditor.js editor de alineación (capitán, entrenador, banquillo, recomendada)
+  hooks/useLeagueAnalytics.js
+  services/
+    analytics/            ledger, valoración, previsión, rivales, protección, backtest (puro + tests)
+    automation/           cargador de datos, informe (modelo, Markdown, HTML), trabajo diario, auto-mercado, avisos
+scripts/                  instalación local y tarea programada
+docs/                     documentación, notas de la API y README original
+```
+
+## Seguridad y privacidad
+
+- Los **tokens de sesión** nunca se escriben en informes, capturas ni en el repositorio.
+- La única **acción de escritura automática** es el auto-mercado (opcional, desactivado por defecto). Guardar la alineación solo ocurre al pulsar *Guardar*.
+- Los informes y capturas contienen datos de tu liga: se guardan fuera del repositorio (carpeta de datos de la app y la carpeta de exportación que elijas).
+- El PDF se genera en una ventana aislada sin JavaScript ni acceso a red; todo texto de la API se escapa.
+- La actualización automática desde el repositorio original está **desactivada** para no sobrescribir este fork.
+
+Ver [SECURITY.md](SECURITY.md).
+
+## Documentación
+
+- [CHANGELOG.md](CHANGELOG.md): historial de cambios del fork.
+- [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md): flujo de datos y módulos.
+- [docs/AUTOMATIZACION.md](docs/AUTOMATIZACION.md): trabajo diario, tarea programada y Google Drive.
+- [docs/API-NOTAS.md](docs/API-NOTAS.md): comportamiento observado de la API (temporada 26/27).
+- [docs/upstream/README.md](docs/upstream/README.md): README original de LaLigaApp.
+
+## Créditos y licencia
+
+Este producto incluye **"LaLigaApp" (c) 2025–presente Externoak** — https://github.com/Externoak/LaLigaApp/
+
+Modificaciones (c) 2026 alfreedx, distribuidas bajo la misma licencia **GPL-3.0-or-later con Términos Adicionales — Atribución (GPLv3 §7)**. Ver [LICENSE](LICENSE) y [NOTICE](NOTICE). La lista de cambios respecto al original (GPLv3 §5a) está en [CHANGELOG.md](CHANGELOG.md).
+
+Esta atribución no implica respaldo ni patrocinio por parte de los autores originales. Datos de mercado y onces probables: [futbolfantasy.com](https://www.futbolfantasy.com/).

@@ -40,7 +40,7 @@ The official La Liga Fantasy only has a mobile application, leaving PC users wit
 
 Main menu image:
 
-<img src="docs/LaLigaAppMainPage.png">
+<img src="../img/LaLigaAppMainPage.png">
 
 
 ## 🔐 Privacy and Security
@@ -328,7 +328,7 @@ npm install
 ## 📝 License
 
 This project is distributed under **GPL-3.0-or-later** with **Additional Terms — Attribution (GPLv3 §7)**.  
-See **[LICENSE](./LICENSE)** and **[NOTICE](./NOTICE)** for the full text.
+See **[LICENSE](../../LICENSE)** and **[NOTICE](../../NOTICE)** for the full text.
 
 ### ✅ Attribution Summary (mandatory)
 If you redistribute this project or create derivative works, include a **visible mention** of the original project **in one of these ways**:

@@ -613,7 +613,8 @@ const buildApp = (config) => {
     res.status(404).json({ error: 'Not found', path: req.originalUrl });
   });
 
-  app.use((err, req, res, next) => {
+  // Express identifica el manejador de errores por sus 4 parámetros: `_next` debe seguir aquí.
+  app.use((err, req, res, _next) => {
     console.error('Unified server error:', err);
     res.status(500).json({ error: 'Internal server error' });
   });

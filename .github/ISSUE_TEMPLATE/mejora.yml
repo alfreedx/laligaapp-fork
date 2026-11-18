@@ -1,0 +1,22 @@
+name: Mejora
+description: Propón una funcionalidad o un cambio
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: objetivo
+    attributes:
+      label: Qué quieres conseguir
+      description: El problema o la decisión de juego que te ayudaría a resolver.
+    validations:
+      required: true
+  - type: textarea
+    id: propuesta
+    attributes:
+      label: Propuesta
+      description: Cómo debería funcionar (pantalla, informe, automatización…).
+  - type: checkboxes
+    id: escritura
+    attributes:
+      label: Acciones sobre la cuenta
+      options:
+        - label: La mejora implica escribir en la cuenta de LaLiga (pujar, vender, alinear…). Debe ser opcional y con confirmación o simulación.

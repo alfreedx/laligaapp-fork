@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Proyecto original (LaLigaApp)
+    url: https://github.com/Externoak/LaLigaApp/issues
+    about: Problemas de funciones heredadas sin cambios del original.
