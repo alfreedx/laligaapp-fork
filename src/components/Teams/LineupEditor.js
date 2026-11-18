@@ -3,9 +3,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from '../../utils/motionShim';
 import {
   Target, Save, RotateCcw, Users, ChevronDown, Check,
-  AlertCircle, User, X, Search, Grid3x3, Loader
+  AlertCircle, User, X, Search, Grid3x3, Loader, Sparkles
 } from 'lucide-react';
 import { fantasyAPI } from '../../services/api';
+import useMarketTrends from '../../hooks/useMarketTrends';
+import marketTrendsService from '../../services/marketTrendsService';
+import { forecastPoints, bestLineup, FORMATIONS } from '../../services/analytics/forecast';
 import { useAuthStore } from '../../stores/authStore';
 import LoadingSpinner from '../Common/LoadingSpinner';
 import toast from 'react-hot-toast';
@@ -268,6 +271,51 @@ const LineupEditor = () => {
     }
   };
 
+  // Alineación recomendada (previsión de puntos de la app). Solo rellena el
+  // editor: el usuario revisa y pulsa Guardar.
+  const { trendsReady } = useMarketTrends();
+  const [recommendation, setRecommendation] = useState(null);
+
+  const handleLoadRecommended = () => {
+    if (!teamPlayers.length) {
+      toast.error('No se ha cargado tu plantilla');
+      return;
+    }
+    const rows = teamPlayers
+      .filter((pt) => pt.playerMaster)
+      .map((pt) => {
+        const pm = pt.playerMaster;
+        const trend = trendsReady ? marketTrendsService.resolveTrendForPlayer(pm) : null;
+        return { id: String(pt.playerTeamId || pt.id), name: pm.nickname || pm.name, positionId: pm.positionId, pt, ...forecastPoints(pm, trend) };
+      });
+    // Solo formaciones disponibles en tu cuenta (si la API las da); si no, las estándar + premium del usuario
+    const available = allFormations
+      .filter(({ isPremium }) => !isPremium || formationsEnabled)
+      .map(({ formation }) => String(formation).replace(/,/g, '-'));
+    const best = bestLineup(rows, { formations: available.length ? available : FORMATIONS });
+    if (best.missing > 0) {
+      toast.error('No tienes jugadores suficientes para ninguna formación');
+      return;
+    }
+    const byPos = (posId) => best.starters.filter((p) => p.positionId === posId).sort((a, b) => b.xp - a.xp).map((p) => p.pt);
+    setSelectedFormation(best.formation.replace(/-/g, ','));
+    setLineup({
+      goalkeeper: byPos(1)[0] || null,
+      defender: byPos(2),
+      midfield: byPos(3),
+      striker: byPos(4),
+    });
+    setRecommendation({
+      formation: best.formation,
+      total: best.total,
+      captain: best.captain?.name || null,
+      coach: best.coach?.name || null,
+      doubtful: best.starters.filter((p) => p.playProb < 0.6).map((p) => `${p.name} (${Math.round(p.playProb * 100)} %)`),
+      trendsReady,
+    });
+    toast.success(`Alineación recomendada cargada (${best.formation}). Revísala y pulsa Guardar.`);
+  };
+
   // Reset to original
   const handleReset = () => {
     if (originalLineup) {
@@ -356,7 +404,16 @@ const LineupEditor = () => {
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleLoadRecommended}
+              disabled={saving || !teamPlayers.length}
+              className="btn-secondary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Rellena el editor con el once de más puntos esperados (no guarda hasta que pulses Guardar)"
+            >
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <span>Cargar recomendada</span>
+            </button>
             <button
               onClick={handleReset}
               disabled={!hasChanges || saving}
@@ -384,6 +441,24 @@ const LineupEditor = () => {
             </button>
           </div>
         </div>
+        {recommendation && (
+          <div className="mt-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-gray-700 dark:text-gray-200 space-y-1">
+            <div>
+              <Sparkles className="inline w-4 h-4 text-amber-500 mr-1" />
+              Recomendada: <b>{recommendation.formation}</b> · previsión <b>{recommendation.total.toFixed(1).replace('.', ',')} pts</b> (con capitán ×2 y entrenador).
+              {hasChanges ? ' Pulsa Guardar para aplicarla.' : ''}
+            </div>
+            <div>
+              Pon como <b>capitán a {recommendation.captain || '—'}</b> y como <b>entrenador a {recommendation.coach || '—'}</b> (se eligen en la app oficial).
+            </div>
+            {recommendation.doubtful.length > 0 && (
+              <div className="text-amber-700 dark:text-amber-400">⚠️ Titulares con probabilidad &lt; 60 %: {recommendation.doubtful.join(', ')} — revisa los onces probables antes del cierre.</div>
+            )}
+            {!recommendation.trendsReady && (
+              <div className="text-gray-500">Sin datos de futbolfantasy todavía: la previsión usa solo medias y forma.</div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Formation Selector - Improved Design */}
