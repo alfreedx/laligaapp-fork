@@ -10,6 +10,9 @@
 > - 2026-11-18 — Captura opcional de respuestas de la API para depuración en el servidor local (solo con la variable `API_CAPTURE_DIR`; nunca guarda cabeceras ni tokens).
 > - 2026-11-18 — Aviso de versión modificada en la interfaz.
 > - 2026-11-18 — Nueva sección **Rentabilidad**: precio de compra de todos los jugadores de la liga reconstruido desde la actividad, ganancia latente/efectiva, oferta LaLiga +10 %, proyección a N días, oportunidades de cláusula y dinero estimado de los rivales. El lector de futbolfantasy guarda además el histórico de valor (1/2/3/7/14/30 días).
+> - 2026-11-18 — **Informe diario automático** (`informe-fantasy.md` + `plantilla.json`) tras el reseteo del mercado: avisos, ofertas recibidas con ganancia si aceptas, oportunidades de mercado (económicas y deportivas), cláusulas que se abren en 48 h, dinero de rivales. Captura local diaria de valores. Modo `--daily-run` para el Programador de tareas de Windows e instancia única.
+> - 2026-11-18 — **Auto-mercado** opcional (desactivado y en simulación por defecto): pone a la venta a valor de mercado los jugadores propios que no estén en el mercado. Nunca acepta ofertas ni puja.
+> - 2026-11-18 — Página de **Ajustes** con la configuración de la automatización.
 > - 2026-11-18 — Eliminados los workflows de GitHub Actions del original (release automática), no aplicables a este fork.
 
 ---

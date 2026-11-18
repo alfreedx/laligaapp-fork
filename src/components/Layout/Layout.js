@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Home, Trophy, ShoppingCart, Users, Calendar, Search, X, Moon, Sun,
-  Activity, LogOut, Shield, User, Target, RefreshCw, Clock, Bug, FileText, Edit3, Smartphone, TrendingUp,
+  Activity, LogOut, Shield, User, Target, RefreshCw, Clock, Bug, FileText, Edit3, Smartphone, TrendingUp, Settings as SettingsIcon,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -18,6 +18,7 @@ import updateService from '../../services/updateService';
 import { sanitizeSearchTerm } from '../../utils/validation';
 import { setImageFallback, getPositionName, extractArray, formatCurrencyCompact as formatCurrency } from '../../utils/helpers';
 import MobileNav from './MobileNav';
+import DailyAutomation from '../Automation/DailyAutomation';
 
 // ---------- menu config ----------
 const MENU_ITEMS = [
@@ -34,6 +35,7 @@ const MENU_ITEMS = [
   { path: '/players', icon: User, label: 'Jugadores' },
   { path: '/clauses', icon: Shield, label: 'Cláusulas' },
   { path: '/laliga-teams', icon: Trophy, label: 'Equipos de la Liga' },
+  { path: '/settings', icon: SettingsIcon, label: 'Ajustes y automatización' },
 ];
 
 // ---------- shared classnames ----------
@@ -619,6 +621,7 @@ const Layout = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg overflow-x-hidden">
+      <DailyAutomation />
       <ApiStatus />
 
       <aside

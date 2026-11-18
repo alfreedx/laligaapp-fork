@@ -10,6 +10,7 @@ const {
 } = require('./electron/server-manager');
 const { processPendingUpdates } = require('./electron/auto-updater');
 const { registerIpcHandlers } = require('./electron/ipc-handlers');
+const { registerAutomation } = require('./electron/automation');
 
 let mainWindow;
 const activeAppOrigins = new Set();
@@ -136,7 +137,18 @@ registerIpcHandlers({
     activeAppOrigins,
 });
 
-app.whenReady().then(createWindow);
+// Fork: automatización diaria (informe + auto-mercado). Con --daily-run la
+// app se abre minimizada, hace el trabajo y se cierra sola.
+const automation = registerAutomation({ getMainWindow: () => mainWindow });
+
+if (automation.isPrimary) {
+    app.whenReady().then(async () => {
+        await createWindow();
+        if (automation.isDailyRun && mainWindow) {
+            mainWindow.once('show', () => mainWindow.minimize());
+        }
+    });
+}
 
 app.on('window-all-closed', () => {
     stopUnifiedServer();

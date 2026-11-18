@@ -34,6 +34,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deletePersistentFile: (filePath) => ipcRenderer.invoke('delete-persistent-file', filePath),
   fileExists: (filePath) => ipcRenderer.invoke('file-exists', filePath),
 
+  // Fork: automatización diaria (informe a Drive, auto-mercado)
+  automation: {
+    getConfig: () => ipcRenderer.invoke('automation:get-config'),
+    chooseExportDir: () => ipcRenderer.invoke('automation:choose-export-dir'),
+    openExportDir: () => ipcRenderer.invoke('automation:open-export-dir'),
+    writeExport: (files) => ipcRenderer.invoke('automation:write-export', files),
+    notify: (title, body) => ipcRenderer.invoke('automation:notify', { title, body }),
+    dailyRunFinished: (reason) => ipcRenderer.invoke('automation:daily-run-finished', reason),
+    onRunNow: (cb) => {
+      const sub = (_e, d) => cb(d);
+      ipcRenderer.on('automation:run-now', sub);
+      return () => ipcRenderer.removeListener('automation:run-now', sub);
+    },
+  },
+
   // ✅ fixed logger
   log: (...args) => {
     if (process.env.NODE_ENV === 'development') {
