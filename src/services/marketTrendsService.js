@@ -64,6 +64,9 @@ class MarketTrendsService {
      */
     isCacheStale() {
         if (!this.lastMarketScrape) return true;
+        // Caché de formato antiguo (sin histórico valor1/valor3/valor7…): refrescar.
+        const sample = this.marketValuesCache.values().next().value;
+        if (sample && !('valor1' in sample)) return true;
         return (Date.now() - this.lastMarketScrape.getTime()) > this.CACHE_DURATION;
     }
 

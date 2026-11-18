@@ -17,6 +17,7 @@ const Matches = React.lazy(() => import(/* webpackChunkName: "matches" */ './com
 const Players = React.lazy(() => import(/* webpackChunkName: "players" */ './components/Players/Players'));
 const Clauses = React.lazy(() => import(/* webpackChunkName: "clauses" */ './components/Clauses/Clauses'));
 const Activity = React.lazy(() => import(/* webpackChunkName: "activity" */ './components/Activity/Activity'));
+const Rentabilidad = React.lazy(() => import(/* webpackChunkName: "rentabilidad" */ './components/Rentabilidad/Rentabilidad'));
 const Lineup = React.lazy(() => import(/* webpackChunkName: "lineup" */ './components/Teams/Lineup'));
 const LineupEditor = React.lazy(() => import(/* webpackChunkName: "lineup-editor" */ './components/Teams/LineupEditor'));
 const TeamPlayers = React.lazy(() => import(/* webpackChunkName: "team-players" */ './components/Teams/TeamPlayers'));
@@ -82,6 +83,7 @@ function AppRoutes() {
         <Route path="/standings" element={<Standings />} />
         <Route path="/market" element={<Market />} />
         <Route path="/market/trends" element={<MarketTrends />} />
+        <Route path="/rentabilidad" element={<Rentabilidad />} />
         <Route path="/market/ofertas" element={<Market />} />
         <Route path="/teams" element={<Teams />} />
         <Route path="/teams/:teamId" element={<Teams />} />

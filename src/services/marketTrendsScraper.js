@@ -124,6 +124,26 @@ export const parseMarketData = (htmlText) => {
 
       const teamName = equipoId && teamMapping[equipoId] ? teamMapping[equipoId] : 'LaLiga';
 
+      // Histórico de valor (hace N días) y métricas de tendencia de futbolfantasy.
+      const numAttr = (attr) => {
+        const m = elementText.match(new RegExp(`data-${attr}="([^"]+)"`));
+        const n = m ? parseFloat(m[1]) : NaN;
+        return Number.isFinite(n) ? n : null;
+      };
+      const history = {
+        valor1: numAttr('valor1'),
+        valor2: numAttr('valor2'),
+        valor3: numAttr('valor3'),
+        valor7: numAttr('valor7'),
+        valor14: numAttr('valor14'),
+        valor30: numAttr('valor30'),
+        diferencia3: numAttr('diferencia3'),
+        diferencia7: numAttr('diferencia7'),
+        diferencia30: numAttr('diferencia30'),
+        tendenciaFF: numAttr('tendencia'),
+        aceleracion: numAttr('aceleracion'),
+      };
+
       const normalizedName = normalizePlayerName(nombre);
       const normalizedPositionStr = normalizePosition(posicion);
       const normalizedTeamNameStr = normalizeTeamName(teamName);
@@ -139,6 +159,7 @@ export const parseMarketData = (htmlText) => {
         originalTeamName: teamName,
         equipoId: equipoId,
         valor: valorNumerico,
+        ...history,
         diferencia1: diferenciaNumerico,
         tendencia: diferenciaNumerico > 0 ? '📈' : diferenciaNumerico < 0 ? '📉' : '➡️',
         porcentaje: porcentajeNumerico,

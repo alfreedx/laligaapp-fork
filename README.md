@@ -9,6 +9,7 @@
 > - 2026-11-18 — Actualización automática desde el repositorio original desactivada (evita sobrescribir las modificaciones); se mantiene el aviso de nueva versión.
 > - 2026-11-18 — Captura opcional de respuestas de la API para depuración en el servidor local (solo con la variable `API_CAPTURE_DIR`; nunca guarda cabeceras ni tokens).
 > - 2026-11-18 — Aviso de versión modificada en la interfaz.
+> - 2026-11-18 — Nueva sección **Rentabilidad**: precio de compra de todos los jugadores de la liga reconstruido desde la actividad, ganancia latente/efectiva, oferta LaLiga +10 %, proyección a N días, oportunidades de cláusula y dinero estimado de los rivales. El lector de futbolfantasy guarda además el histórico de valor (1/2/3/7/14/30 días).
 > - 2026-11-18 — Eliminados los workflows de GitHub Actions del original (release automática), no aplicables a este fork.
 
 ---
