@@ -7,6 +7,7 @@ import {
   buildSquadRows, buildMarketRows, buildRivalRows, buildMoneyRows, buildSalesRows,
 } from '../analytics/rows';
 import { bestLineup } from '../analytics/forecast';
+import { buildBidStats, recentActivity, suggestedBid } from '../analytics/rivalIntel';
 
 const H48 = 48 * 3600 * 1000;
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -30,7 +31,7 @@ const clauseText = (r) => (r.isShielded ? 'blindado' : r.clauseIsOpen ? 'ABIERTA
  * @param {object} data   salida de loadLeagueData
  * @param {object} opts   { settings, autoMarketLog, playerNames, leagueName }
  */
-export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], playerNames = new Map(), leagueName = '' } = {}) => {
+export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], playerNames = new Map(), leagueName = '', clauseSpend = null } = {}) => {
   const days = settings.projectionDays || 5;
   const now = new Date();
   const common = { ledger: data.ledger, resolveTrend: data.resolveTrend, rateMode: 'avg3' };
@@ -39,7 +40,10 @@ export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], play
   const market = buildMarketRows({ ...common, market: data.market, ownerByPlayer: data.ownerByPlayer })
     .filter((r) => r.sellerId !== data.myTeam?.managerId);
   const rivals = buildRivalRows({ ...common, teams: data.teams, myTeamId: data.myTeamId });
-  const money = buildMoneyRows({ teams: data.teams, ledger: data.ledger, myTeam: data.myTeam, myMoney: data.myMoney, initialMoney: settings.initialMoney });
+  const money = buildMoneyRows({ teams: data.teams, ledger: data.ledger, myTeam: data.myTeam, myMoney: data.myMoney, initialMoney: settings.initialMoney, clauseSpend });
+  const bidStats = buildBidStats({ ledger: data.ledger, trendById: data.trendById || (() => null), now });
+  const recent = recentActivity(data.ledger, { days: 7, now });
+  const P = (v) => (isNum(v) ? `${v >= 0 ? '+' : ''}${N(v)} %` : '—');
   const sales = buildSalesRows({ ledger: data.ledger, managerId: data.myTeam?.managerId, playerNames }).slice(0, 8);
 
   const sum = (rows, k) => rows.reduce((s, r) => s + (isNum(r[k]) ? r[k] : 0), 0);
@@ -87,18 +91,31 @@ export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], play
     .sort((a, b) => a.growthAvg3 - b.growthAvg3)
     .slice(0, 6);
 
-  // ---- oportunidades ----
-  const econ = market.filter((r) => isNum(r.gainNLaLiga) && r.gainNLaLiga > 0)
-    .sort((a, b) => b.gainNLaLiga - a.gainNLaLiga).slice(0, 8);
-  const sport = market.filter((r) => r.status === 'ok' && isNum(r.averagePoints))
-    .sort((a, b) => b.averagePoints - a.averagePoints).slice(0, 8);
-  const clauseSoon = rivals.filter((r) => !r.isShielded && !r.clauseIsOpen && r.clauseOpenAt && new Date(r.clauseOpenAt) - now <= H48)
-    .sort((a, b) => ((b.clauseGainN ?? -Infinity) - (a.clauseGainN ?? -Infinity)) || (new Date(a.clauseOpenAt) - new Date(b.clauseOpenAt)))
-    .slice(0, 12);
-  const clauseOpen = rivals.filter((r) => !r.isShielded && r.clauseIsOpen && isNum(r.clauseGainN) && r.clauseGainN > 0)
-    .sort((a, b) => b.clauseGainN - a.clauseGainN).slice(0, 8);
-  const clauseSport = rivals.filter((r) => !r.isShielded && (r.clauseIsOpen || (r.clauseOpenAt && new Date(r.clauseOpenAt) - now <= H48)) && r.status === 'ok' && isNum(r.averagePoints))
-    .sort((a, b) => b.averagePoints - a.averagePoints).slice(0, 6);
+  // ---- oportunidades: mercado de LaLiga (sin jugadores puestos por otros
+  // managers) + jugadores de rivales con cláusula abierta o que se abre en ≤ 48 h.
+  // Precio de referencia: precio de salida (mercado) o cláusula.
+  const candidates = [
+    ...market.filter((r) => !r.sellerId).map((r) => ({
+      ...r, origin: 'Mercado', from: 'LaLiga', price: r.buyPrice,
+      available: `hasta ${dt(r.expiration)}`, availableAt: now.toISOString(),
+      bid: suggestedBid(r.buyPrice, bidStats.overall),
+    })),
+    ...rivals
+      .filter((r) => !r.isShielded && isNum(r.clause) && (r.clauseIsOpen || (r.clauseOpenAt && new Date(r.clauseOpenAt) - now <= H48)))
+      .map((r) => ({
+        ...r, origin: 'Cláusula', from: r.owner, price: r.clause,
+        available: r.clauseIsOpen ? 'abierta' : `se abre ${dt(r.clauseOpenAt)}`,
+        availableAt: r.clauseIsOpen ? now.toISOString() : r.clauseOpenAt,
+        gainN: isNum(r.valueN) ? r.valueN - r.clause : null,
+        gainNLaLiga: isNum(r.laLigaN) ? r.laLigaN - r.clause : null,
+      })),
+  ];
+  const econ = candidates.filter((r) => isNum(r.gainNLaLiga) && r.gainNLaLiga > 0)
+    .sort((a, b) => b.gainNLaLiga - a.gainNLaLiga).slice(0, 10);
+  const sport = candidates.filter((r) => r.status === 'ok' && r.positionId !== 5 && isNum(r.xp))
+    .sort((a, b) => b.xp - a.xp).slice(0, 10);
+  const clauseSoon = candidates.filter((r) => r.origin === 'Cláusula' && !r.clauseIsOpen)
+    .sort((a, b) => new Date(a.clauseOpenAt) - new Date(b.clauseOpenAt));
 
   // ---- once recomendado y fichajes que lo mejoran ----
   const lineup = bestLineup(squad);
@@ -108,7 +125,7 @@ export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], play
   lineup.starters.forEach((p) => {
     if (!worstStarter[p.positionId] || p.xp < worstStarter[p.positionId].xp) worstStarter[p.positionId] = p;
   });
-  const upgrades = market
+  const upgrades = candidates
     .filter((r) => r.positionId !== 5 && isNum(r.xp) && worstStarter[r.positionId] && r.xp > worstStarter[r.positionId].xp + 0.5)
     .map((r) => ({ r, replaces: worstStarter[r.positionId], delta: r.xp - worstStarter[r.positionId].xp }))
     .sort((a, b) => b.delta - a.delta)
@@ -149,11 +166,11 @@ export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], play
   md.push('');
 
   if (upgrades.length) {
-    md.push('## ➕ Fichajes del mercado que mejorarían tu once');
-    md.push(table(['Jugador', 'Pos', 'Rival', 'xP', 'Sustituye a', 'Mejora', 'Precio', '¿Te llega?'],
+    md.push('## ➕ Fichajes (mercado o cláusula) que mejorarían tu once');
+    md.push(table(['Jugador', 'Pos', 'Origen', 'Rival', 'xP', 'Sustituye a', 'Mejora', 'Precio', '¿Te llega?', 'Disponible'],
       upgrades.map(({ r, replaces, delta }) => [
-        r.name, r.position, r.nextRival ? `${r.nextRival} (${venue(r)})` : '—', N(r.xp), `${replaces.name} (${N(replaces.xp)})`,
-        `+${N(delta)}`, M(r.buyPrice), isNum(data.myMoney) && data.myMoney >= r.buyPrice ? 'sí' : 'vendiendo',
+        r.name, r.position, r.origin, r.nextRival ? `${r.nextRival} (${venue(r)})` : '—', N(r.xp), `${replaces.name} (${N(replaces.xp)})`,
+        `+${N(delta)}`, M(r.price), isNum(data.myMoney) && data.myMoney >= r.price ? 'sí' : 'vendiendo', r.available,
       ])));
     md.push('');
   }
@@ -186,42 +203,45 @@ export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], play
     md.push('');
   }
 
-  md.push(`## 💰 Mercado hoy — oportunidades económicas (top ${econ.length})`);
-  md.push(econ.length ? table(['Jugador', 'Pos', 'Vende', 'Precio', 'Δ1d', 'Δ3d/día', `G.${days}d`, `G.${days}d LaLiga`, 'Media', 'Pujas', 'Expira'],
-    econ.map((r) => [r.name, r.position, r.seller, M(r.buyPrice), K(r.dailyGrowth), K(r.growthAvg3), SM(r.gainN), SM(r.gainNLaLiga), N(r.averagePoints, 2), r.bids, dt(r.expiration)]))
+  md.push('_Oportunidades = mercado de LaLiga (sin los jugadores que ponen a la venta otros managers) + jugadores de rivales con cláusula abierta o que se abre en ≤ 48 h (precio = cláusula)._');
+  md.push('');
+  md.push(`## 💰 Oportunidades económicas (top ${econ.length})`);
+  md.push(econ.length ? table(['Jugador', 'Pos', 'Origen', 'De', 'Precio', 'Puja sug.', 'Valor', 'Δ1d', 'Δ3d/día', `G.${days}d`, `G.${days}d LaLiga`, 'xP', 'Disponible'],
+    econ.map((r) => [r.name, r.position, r.origin, r.from, M(r.price), r.bid ? M(r.bid) : '—', M(r.value), K(r.dailyGrowth), K(r.growthAvg3), SM(r.gainN), SM(r.gainNLaLiga), N(r.xp), r.available]))
     : 'Ninguna con ganancia esperada positiva.');
   md.push('');
 
-  md.push(`## ⚽ Mercado hoy — oportunidades deportivas (top ${sport.length})`);
-  md.push(sport.length ? table(['Jugador', 'Pos', 'Vende', 'Precio', 'Media', 'Pts', 'Pts/M', 'Δ3d/día'],
-    sport.map((r) => [r.name, r.position, r.seller, M(r.buyPrice), N(r.averagePoints, 2), r.points ?? '—', N(r.pointsPerMillion, 2), K(r.growthAvg3)]))
+  md.push(`## ⚽ Oportunidades deportivas (top ${sport.length}, por puntos esperados)`);
+  md.push(sport.length ? table(['Jugador', 'Pos', 'Origen', 'De', 'Precio', 'xP', 'Prob', 'Rival', 'Media', 'Pts/M', 'Δ3d/día', 'Disponible'],
+    sport.map((r) => [r.name, r.position, r.origin, r.from, M(r.price), N(r.xp), `${Math.round((r.playProb ?? 0) * 100)} %`, r.nextRival ? `${r.nextRival} (${venue(r)})` : '—', N(r.averagePoints, 2), N(r.pointsPerMillion, 2), K(r.growthAvg3), r.available]))
     : '—');
   md.push('');
 
-  md.push('## 🔓 Cláusulas que se abren en las próximas 48 h');
-  md.push(clauseSoon.length ? table(['Jugador', 'Pos', 'Dueño', 'Se abre', 'Cláusula', 'Valor', `Tu g.${days}d LaLiga`, 'Media'],
-    clauseSoon.map((r) => [r.name, r.position, r.owner, dt(r.clauseOpenAt), M(r.clause), M(r.value), SM(r.clauseGainN), N(r.averagePoints, 2)]))
+  md.push(`## 🔓 Calendario de cláusulas que se abren en las próximas 48 h (${clauseSoon.length})`);
+  md.push(clauseSoon.length ? table(['Se abre', 'Jugador', 'Pos', 'Dueño', 'Cláusula', 'Valor', `G.${days}d LaLiga`, 'xP'],
+    clauseSoon.map((r) => [dt(r.clauseOpenAt), r.name, r.position, r.from, M(r.clause), M(r.value), SM(r.gainNLaLiga), N(r.xp)]))
     : 'Ninguna.');
   md.push('');
 
-  md.push('## 🟢 Cláusulas ya abiertas y rentables');
-  md.push(clauseOpen.length ? table(['Jugador', 'Pos', 'Dueño', 'Cláusula', 'Valor', `Tu g.${days}d LaLiga`, 'Media'],
-    clauseOpen.map((r) => [r.name, r.position, r.owner, M(r.clause), M(r.value), SM(r.clauseGainN), N(r.averagePoints, 2)]))
-    : 'Ninguna con ganancia esperada positiva.');
+  md.push('## 🕵️ Rivales: dinero, pujas y actividad');
+  const ov = bidStats.overall;
+  md.push(ov.n
+    ? `En los fichajes de mercado de los últimos 30 días (${ov.n} con valor conocido), la liga paga de mediana **${P(ov.median)}** sobre el valor (percentil 75: ${P(ov.p75)}). La "puja sugerida" usa el percentil 75${ov.n < 5 ? ' (aún pocas muestras: sin sugerencia)' : ''}.`
+    : 'Sin datos suficientes de pujas en los últimos 30 días.');
   md.push('');
-
-  if (clauseSport.length) {
-    md.push('## 🎯 Cláusulas (abiertas o en 48 h) con mejor media de puntos');
-    md.push(table(['Jugador', 'Pos', 'Dueño', 'Cláusula', 'Estado cláusula', 'Media', 'Pts'],
-      clauseSport.map((r) => [r.name, r.position, r.owner, M(r.clause), clauseText(r), N(r.averagePoints, 2), r.points ?? '—'])));
-    md.push('');
-  }
-
-  md.push('## 🏦 Dinero estimado de los rivales');
-  md.push(table(['Manager', 'Pos', 'Pts', 'Valor equipo', 'Dinero base', 'Dinero ajustado', 'Poder de compra'],
-    [...money].sort((a, b) => (b.calibrated ?? -Infinity) - (a.calibrated ?? -Infinity)).map((m) => [
-      `${m.isMe ? '⭐ ' : ''}${m.name}`, m.position ?? '—', m.points ?? '—', M(m.teamValue), M(m.estimated), M(m.calibrated), M(m.maxBuyingPower),
-    ])));
+  md.push(table(['Manager', 'Pos', 'Pts', 'Dinero ajustado', 'Poder de compra', 'Pujas 30d', 'Sobrepuja mediana', 'Máx', 'Compras 7d', 'Ventas 7d', 'Subidas cláusula'],
+    [...money].sort((a, b) => (b.calibrated ?? -Infinity) - (a.calibrated ?? -Infinity)).map((m) => {
+      const t = data.teams.find((x) => x.teamId === m.id);
+      const b = bidStats.byManager.get(t?.managerId) || {};
+      const a = recent.get(t?.managerId) || {};
+      return [
+        `${m.isMe ? '⭐ ' : ''}${m.name}`, m.position ?? '—', m.points ?? '—', M(m.calibrated), M(m.maxBuyingPower),
+        b.n || 0, P(b.median), P(b.max),
+        a.buys ? `${a.buys} (${M(a.buySpend, 1)})` : '0', a.sells ? `${a.sells} (${M(a.sellIncome, 1)})` : '0',
+        m.clauseRaiseSpend ? `−${M(m.clauseRaiseSpend, 1)}` : '—',
+      ];
+    })));
+  md.push(`_Dinero: inicial + ventas + premios − compras − subidas de cláusula detectadas (coste supuesto ${Math.round((settings.clauseRaiseCostFactor ?? 0.5) * 100)} % del aumento), ajustado con el desvío de mi saldo real._`);
   md.push('');
 
   md.push('## 🤖 Auto-mercado');
@@ -275,11 +295,17 @@ export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], play
     },
     fichajesQueMejoranElOnce: upgrades.map(({ r, replaces, delta }) => ({ jugador: r.name, posicion: r.position, xP: r.xp, sustituyeA: replaces.name, mejora: delta, precio: r.buyPrice, vende: r.seller })),
     ofertasRecibidas: offers.map((o) => ({ jugador: o.r.name, precioCompra: o.r.buyPrice, valor: o.r.value, oferta: o.best.money, de: o.from, gananciaSiAceptas: o.gain, expira: o.best.expirationDate })),
-    mercadoEconomico: econ.map((r) => ({ ...pick(r), vende: r.seller, precio: r.buyPrice, expira: r.expiration })),
-    mercadoDeportivo: sport.map((r) => ({ ...pick(r), vende: r.seller, precio: r.buyPrice })),
-    clausulasProximas48h: clauseSoon.map((r) => ({ ...pick(r), dueño: r.owner, tuGananciaLaLiga: r.clauseGainN })),
-    clausulasAbiertasRentables: clauseOpen.map((r) => ({ ...pick(r), dueño: r.owner, tuGananciaLaLiga: r.clauseGainN })),
-    dineroRivales: money.map((m) => ({ manager: m.name, yo: m.isMe, dineroBase: m.estimated, dineroAjustado: m.calibrated, valorEquipo: m.teamValue, puntos: m.points })),
+    // Oportunidades: mercado de LaLiga + cláusulas abiertas o en ≤ 48 h. precio = salida o cláusula;
+    // ganancia*dLaLiga ya está calculada respecto a ese precio.
+    oportunidadesEconomicas: econ.map((r) => ({ ...pick(r), origen: r.origin, de: r.from, precio: r.price, xP: r.xp, disponible: r.available, disponibleDesde: r.availableAt })),
+    oportunidadesDeportivas: sport.map((r) => ({ ...pick(r), origen: r.origin, de: r.from, precio: r.price, xP: r.xp, probJugar: r.playProb, rival: r.nextRival, disponible: r.available })),
+    clausulasProximas48h: clauseSoon.map((r) => ({ ...pick(r), dueño: r.owner, seAbre: r.clauseOpenAt, precio: r.clause })),
+    dineroRivales: money.map((m) => {
+      const t = data.teams.find((x) => x.teamId === m.id);
+      const b = bidStats.byManager.get(t?.managerId) || {};
+      return { manager: m.name, yo: m.isMe, dineroBase: m.estimated, dineroAjustado: m.calibrated, valorEquipo: m.teamValue, puntos: m.points, pujas30d: b.n || 0, sobrepujaMedianaPct: b.median ?? null, gastoSubidasClausula: m.clauseRaiseSpend };
+    }),
+    sobrepujaLiga: { muestras: ov.n, medianaPct: ov.median, p75Pct: ov.p75 },
     autoMercado: autoMarketLog,
   };
 

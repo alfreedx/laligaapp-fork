@@ -130,12 +130,16 @@ export const buildRivalRows = ({ teams, myTeamId, ledger, resolveTrend, rateMode
 };
 
 /** Dinero estimado de cada manager (y desviación calibrada con el tuyo). */
-export const buildMoneyRows = ({ teams, ledger, myTeam, myMoney, initialMoney }) => {
+export const buildMoneyRows = ({ teams, ledger, myTeam, myMoney, initialMoney, clauseSpend = null }) => {
   if (!ledger) return [];
+  // Gasto detectado en subidas de cláusula (capturas diarias) → se descuenta de la base
+  const spentOnClauses = (id) => (clauseSpend?.get(String(id)) || 0);
   const mine = myTeam ? estimateMoney(ledger, myTeam.managerId, { initialMoney }) : null;
-  const calibration = mine && typeof myMoney === 'number' ? myMoney - mine.estimated : 0;
+  const calibration = mine && typeof myMoney === 'number' ? myMoney - (mine.estimated - spentOnClauses(myTeam.managerId)) : 0;
   return (teams || []).map((t) => {
-    const e = estimateMoney(ledger, t.managerId, { initialMoney, calibration });
+    const raw = estimateMoney(ledger, t.managerId, { initialMoney });
+    const base = raw.estimated - spentOnClauses(t.managerId);
+    const e = { ...raw, estimated: base, calibrated: base + calibration };
     const isMe = myTeam && t.teamId === myTeam.teamId;
     const b = e.breakdown;
     return {
@@ -153,6 +157,7 @@ export const buildMoneyRows = ({ teams, ledger, myTeam, myMoney, initialMoney })
       prizes: (b.jornada || 0) + (b.bonus || 0),
       // Poder de compra máximo: dinero + vender toda la plantilla a valor
       maxBuyingPower: (isMe ? myMoney ?? e.estimated : e.calibrated) + (t.teamValue || 0),
+      clauseRaiseSpend: spentOnClauses(t.managerId),
       calibration,
     };
   });

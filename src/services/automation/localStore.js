@@ -57,6 +57,7 @@ export const DEFAULT_SETTINGS = {
   autoMarketDryRun: true,     // simulación: registra lo que haría sin hacerlo
   autoMarketExcluded: [],     // playerMaster ids que nunca se ponen a la venta
   initialMoney: 100_000_000,
+  clauseRaiseCostFactor: 0.5, // supuesto: subir la cláusula X cuesta X × factor (ajustable)
   projectionDays: 5,
 };
 

@@ -10,9 +10,8 @@
 import { loadLeagueData } from './dataLoader';
 import { runAutoMarket } from './autoMarket';
 import { buildDailyReport, buildSnapshot } from './report';
-import { loadSettings, loadState, saveState, writeJson, snapshotFile } from './localStore';
-import { fantasyAPI } from '../api';
-import { extractArray } from '../../utils/helpers';
+import { loadSettings, loadState, saveState, writeJson, readJson, snapshotFile } from './localStore';
+import { clauseRaisesBetween } from '../analytics/rivalIntel';
 
 export const REPORT_FILE = 'informe-fantasy.md';
 export const DATA_FILE = 'plantilla.json';
@@ -50,7 +49,25 @@ export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual
     try {
       const data = await loadLeagueData({ leagueId, user });
 
-      await writeJson(snapshotFile(localDate()), buildSnapshot(data));
+      // Captura de hoy + subidas de cláusula respecto a la captura anterior más reciente (≤ 7 días)
+      const today = localDate();
+      const snapshot = buildSnapshot(data);
+      let prevSnap = null;
+      for (let back = 1; back <= 7 && !prevSnap; back++) {
+        const d = new Date();
+        d.setDate(d.getDate() - back);
+        prevSnap = await readJson(snapshotFile(localDate(d)), null);
+      }
+      await writeJson(snapshotFile(today), snapshot);
+      const clauseRaises = { ...(state.clauseRaises || {}) };
+      if (prevSnap) {
+        const raises = clauseRaisesBetween(prevSnap, snapshot, { costFactor: settings.clauseRaiseCostFactor });
+        clauseRaises[today] = Object.fromEntries(raises); // re-ejecutar el mismo día sobrescribe, no duplica
+      }
+      const clauseSpend = new Map();
+      Object.values(clauseRaises).forEach((day) => Object.entries(day).forEach(([mid, r]) => {
+        clauseSpend.set(mid, (clauseSpend.get(mid) || 0) + (r.estimatedCost || 0));
+      }));
 
       let autoMarketLog = [];
       if (settings.autoMarketEnabled) {
@@ -62,13 +79,7 @@ export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual
         });
       }
 
-      // Nombres para el historial de ventas (jugadores que ya no están en plantillas)
-      let playerNames = new Map();
-      try {
-        extractArray(await fantasyAPI.getAllPlayers()).forEach((p) => playerNames.set(String(p.id), p.nickname || p.name));
-      } catch { /* opcional */ }
-
-      const report = buildDailyReport(data, { settings, autoMarketLog, playerNames, leagueName });
+      const report = buildDailyReport(data, { settings, autoMarketLog, playerNames: data.playerNames, leagueName, clauseSpend });
 
       let exportResult = { success: false, error: 'Solo disponible en la app de escritorio' };
       if (ea) {
@@ -89,6 +100,7 @@ export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual
         lastExportDir: exportResult.dir,
         lastAutoMarket: autoMarketLog,
         lastCounts: report.counts,
+        clauseRaises,
       };
       await saveState(newState);
 

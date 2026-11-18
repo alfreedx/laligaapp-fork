@@ -42,12 +42,21 @@ export const loadLeagueData = async ({ leagueId, user }) => {
     await sleep(250);
   }
 
-  const [activity, marketRes, moneyRes, weekRes] = await Promise.all([
+  const [activity, marketRes, moneyRes, weekRes, allPlayersRes] = await Promise.all([
     fetchAllActivity(leagueId),
     fantasyAPI.getMarket(leagueId),
     fantasyAPI.getTeamMoney(myTeamId),
     fantasyAPI.getCurrentWeek().catch(() => null),
+    fantasyAPI.getAllPlayers().catch(() => null),
   ]);
+
+  // Todos los jugadores de LaLiga por id (nombres de vendidos, tendencias por id)
+  const allPlayersById = new Map();
+  extractArray(allPlayersRes).forEach((p) => { if (p?.id) allPlayersById.set(String(p.id), p); });
+  teams.forEach((t) => t.players.forEach((p) => {
+    if (p.playerMaster?.id) allPlayersById.set(String(p.playerMaster.id), { ...allPlayersById.get(String(p.playerMaster.id)), ...p.playerMaster });
+  }));
+  const playerNames = new Map([...allPlayersById.entries()].map(([id, p]) => [id, p.nickname || p.name]));
 
   // Tendencias de futbolfantasy (se refrescan tras el cambio de valores diario)
   let trendsOk = false;
@@ -58,6 +67,7 @@ export const loadLeagueData = async ({ leagueId, user }) => {
     trendsOk = marketTrendsService.marketValuesCache.size > 0;
   }
   const resolveTrend = (pm) => (trendsOk && pm ? marketTrendsService.resolveTrendForPlayer(pm) : null);
+  const trendById = (id) => resolveTrend(allPlayersById.get(String(id)));
 
   // Ofertas recibidas por mis jugadores en venta (incluye la diaria de LaLiga)
   const myTeamTmp = teams.find((t) => t.teamId === myTeamId);
@@ -90,6 +100,9 @@ export const loadLeagueData = async ({ leagueId, user }) => {
     ownerByPlayer,
     myOffers,
     resolveTrend,
+    trendById,
+    allPlayersById,
+    playerNames,
     trendsOk,
     week,
     weekInfo,

@@ -96,14 +96,16 @@ const useLeagueAnalytics = () => {
     gcTime: 60 * 60 * 1000,
   });
 
-  // id → nombre visible (para ventas de jugadores que ya no están en plantillas)
-  const playerNames = useMemo(() => {
+  // id → jugador / nombre visible (ventas de jugadores que ya no están en plantillas, tendencias por id)
+  const allPlayersById = useMemo(() => {
     const m = new Map();
-    extractArray(allPlayersQ.data).forEach((p) => {
-      if (p?.id) m.set(String(p.id), p.nickname || p.name);
-    });
+    extractArray(allPlayersQ.data).forEach((p) => { if (p?.id) m.set(String(p.id), p); });
     return m;
   }, [allPlayersQ.data]);
+  const playerNames = useMemo(
+    () => new Map([...allPlayersById.entries()].map(([id, p]) => [id, p.nickname || p.name])),
+    [allPlayersById]
+  );
 
   const ledger = useMemo(
     () => (activityQ.data ? buildLedger(activityQ.data) : null),
@@ -130,6 +132,12 @@ const useLeagueAnalytics = () => {
     });
   }, [trendsReady]);
 
+  const trendById = useCallback((id) => {
+    const key = String(id);
+    const pm = allPlayersById.get(key) || ownerByPlayer.get(key)?.players.find((p) => String(p.playerMaster?.id) === key)?.playerMaster;
+    return resolveTrend(pm);
+  }, [allPlayersById, ownerByPlayer, resolveTrend]);
+
   const isLoading = standingsQ.isLoading || teamsQ.isLoading || activityQ.isLoading || marketQ.isLoading;
   const error = standingsQ.error || teamsQ.error || activityQ.error || marketQ.error || null;
 
@@ -149,6 +157,7 @@ const useLeagueAnalytics = () => {
     ownerByPlayer,
     playerNames,
     resolveTrend,
+    trendById,
     trendsReady,
     isLoading,
     loadingActivity: activityQ.isFetching,

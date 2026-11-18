@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { TrendingUp, RefreshCw, Download, Info } from 'lucide-react';
 import useLeagueAnalytics from '../../hooks/useLeagueAnalytics';
 import {
@@ -6,6 +6,8 @@ import {
 } from '../../services/analytics/rows';
 import { DEFAULT_INITIAL_MONEY } from '../../services/analytics/ledger';
 import { bestLineup } from '../../services/analytics/forecast';
+import { buildBidStats, recentActivity } from '../../services/analytics/rivalIntel';
+import { loadState } from '../../services/automation/localStore';
 import { getClauseTimeRemaining } from '../../utils/clauseUtils';
 import LoadingState from '../Common/LoadingState';
 import ErrorState from '../Common/ErrorState';
@@ -121,6 +123,13 @@ const columnsFor = (tab, n) => {
         money('estimated', 'Dinero (base)', 'Inicial + ventas + premios − compras'),
         money('calibrated', 'Dinero (ajustado)', 'Base + desvío observado en tu equipo (subidas de cláusula, blindajes…)'),
         money('maxBuyingPower', 'Poder de compra', 'Dinero ajustado + valor de toda su plantilla'),
+        col('bids30', 'Pujas 30d', { num: true, title: 'Fichajes de mercado en 30 días con valor conocido' }),
+        col('overbidMedian', 'Sobrepuja med.', { fmt: fmtPct, num: true, title: 'Cuánto paga de mediana por encima del valor' }),
+        col('overbidMax', 'Sobrepuja máx.', { fmt: fmtPct, num: true }),
+        col('buys7', 'Compras 7d', { num: true }),
+        money('buySpend7', 'Gasto 7d'),
+        col('sells7', 'Ventas 7d', { num: true }),
+        money('clauseRaiseSpend', 'Subidas cláusula', 'Gasto estimado en subir cláusulas (detectado en capturas diarias)'),
         money('spent', 'Gastado'),
         money('earned', 'Ingresado ventas'),
         money('prizes', 'Premios'),
@@ -192,17 +201,21 @@ const SortableTable = ({ rows, columns, sort, onSort }) => {
     });
   }, [rows, columns, sort]);
 
+  // Primera columna con datos de texto (jugador / manager) fija al deslizar en horizontal
+  const stickyIdx = columns.findIndex((c) => c.key === 'name');
+  const stickyCls = (i, bg) => (i === stickyIdx ? `sticky left-0 z-10 ${bg} shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]` : '');
+
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-auto max-h-[calc(100vh-300px)] min-h-[300px] w-full scroll-smooth">
       <table className="min-w-full text-sm">
-        <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
+        <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-20">
           <tr>
-            {columns.map((c) => (
+            {columns.map((c, i) => (
               <th
                 key={c.key}
                 title={c.title}
                 onClick={() => onSort(c.key)}
-                className={`px-2 py-2 font-semibold text-gray-600 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap ${c.num ? 'text-right' : 'text-left'}`}
+                className={`px-2 py-2 font-semibold text-gray-600 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap ${c.num ? 'text-right' : 'text-left'} ${stickyCls(i, 'bg-gray-50 dark:bg-gray-800')}`}
               >
                 {c.label}{sort.key === c.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
                 {c.title ? <Info className="inline w-3 h-3 ml-0.5 opacity-50" /> : null}
@@ -212,12 +225,12 @@ const SortableTable = ({ rows, columns, sort, onSort }) => {
         </thead>
         <tbody>
           {sorted.map((r) => (
-            <tr key={r.id} className="border-t border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/60">
-              {columns.map((c) => {
+            <tr key={r.id} className="group border-t border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/60">
+              {columns.map((c, i) => {
                 const v = r[c.key];
                 const content = c.render ? c.render(r) : c.fmt ? c.fmt(v) : (v ?? '—');
                 return (
-                  <td key={c.key} className={`px-2 py-1.5 whitespace-nowrap ${c.num ? 'text-right tabular-nums' : ''} ${c.colored ? signClass(v) : ''}`}>
+                  <td key={c.key} className={`px-2 py-1.5 whitespace-nowrap ${c.num ? 'text-right tabular-nums' : ''} ${c.colored ? signClass(v) : ''} ${stickyCls(i, 'bg-white dark:bg-dark-card group-hover:bg-gray-50 dark:group-hover:bg-gray-800')}`}>
                     {content}
                   </td>
                 );
@@ -251,6 +264,17 @@ const Rentabilidad = () => {
   const [search, setSearch] = useState('');
   const [position, setPosition] = useState('all');
   const [sorts, setSorts] = useState(DEFAULT_SORT);
+  // Gasto en subidas de cláusula detectado por el trabajo diario (capturas)
+  const [clauseSpend, setClauseSpend] = useState(null);
+  useEffect(() => {
+    loadState().then((st) => {
+      const m = new Map();
+      Object.values(st?.clauseRaises || {}).forEach((day) => Object.entries(day).forEach(([id, r]) => {
+        m.set(id, (m.get(id) || 0) + (r.estimatedCost || 0));
+      }));
+      setClauseSpend(m);
+    });
+  }, []);
 
   const rows = useMemo(() => {
     const common = { ledger: a.ledger, resolveTrend: a.resolveTrend, rateMode };
@@ -274,12 +298,24 @@ const Rentabilidad = () => {
       }
       case 'market': r = buildMarketRows({ ...common, market: a.market, ownerByPlayer: a.ownerByPlayer }); break;
       case 'rivals': r = buildRivalRows({ ...common, teams: a.teams, myTeamId: a.myTeamId }); break;
-      case 'money': return buildMoneyRows({ teams: a.teams, ledger: a.ledger, myTeam: a.myTeam, myMoney: a.myMoney, initialMoney: DEFAULT_INITIAL_MONEY });
+      case 'money': {
+        const stats = buildBidStats({ ledger: a.ledger, trendById: a.trendById });
+        const recent = recentActivity(a.ledger, { days: 7 });
+        r = buildMoneyRows({ teams: a.teams, ledger: a.ledger, myTeam: a.myTeam, myMoney: a.myMoney, initialMoney: DEFAULT_INITIAL_MONEY, clauseSpend })
+          .map((m) => {
+            const t = a.teams.find((x) => x.teamId === m.id);
+            const b = stats.byManager.get(t?.managerId) || {};
+            const act = recent.get(t?.managerId) || {};
+            return { ...m, bids30: b.n || 0, overbidMedian: b.median ?? null, overbidMax: b.max ?? null, buys7: act.buys || 0, buySpend7: act.buySpend || 0, sells7: act.sells || 0 };
+          });
+        r.bidOverall = stats.overall;
+        return r;
+      }
       case 'sales': r = buildSalesRows({ ledger: a.ledger, managerId: a.myTeam?.managerId, playerNames: a.playerNames }); return r;
       default: r = [];
     }
     return r;
-  }, [tab, a.ledger, a.resolveTrend, a.myTeam, a.market, a.ownerByPlayer, a.teams, a.myTeamId, a.myMoney, a.playerNames, rateMode]);
+  }, [tab, a.ledger, a.resolveTrend, a.trendById, a.myTeam, a.market, a.ownerByPlayer, a.teams, a.myTeamId, a.myMoney, a.playerNames, rateMode, clauseSpend]);
 
   // Recalcular proyecciones con N días distinto de 5
   const rowsN = useMemo(() => {
@@ -326,7 +362,7 @@ const Rentabilidad = () => {
   if (a.error) return <ErrorState title="No se pudieron cargar los datos de la liga" error={a.error} onRetry={a.refetchAll} />;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0 max-w-full">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
           <TrendingUp className="w-6 h-6 text-primary-500" /> Rentabilidad
@@ -356,7 +392,7 @@ const Rentabilidad = () => {
         ) : (
           <div className="card p-3 col-span-1 md:col-span-3 text-xs text-gray-500 flex items-center">
             {tab === 'money'
-              ? `Dinero inicial supuesto: ${fmtM(DEFAULT_INITIAL_MONEY, 0)}. "Ajustado" aplica a todos el desvío de tu propio saldo (gastos que la actividad no muestra, como subir cláusulas o blindar).`
+              ? `Dinero inicial supuesto: ${fmtM(DEFAULT_INITIAL_MONEY, 0)}. "Ajustado" descuenta las subidas de cláusula detectadas y aplica el desvío de tu propio saldo.${rows.bidOverall?.n ? ` Sobrepuja de la liga (30 días, ${rows.bidOverall.n} fichajes): mediana ${fmtPct(rows.bidOverall.median)}, p75 ${fmtPct(rows.bidOverall.p75)}.` : ''}`
               : tab === 'lineup' && rows.lineupMeta
                 ? `Formación recomendada: ${rows.lineupMeta.formation} · ${fmtNum(rows.lineupMeta.total, 1)} pts previstos (capitán ×2 + entrenador). Alternativas: ${rows.lineupMeta.ranking.filter((x) => !x.missing).slice(1, 4).map((x) => `${x.formation} ${fmtNum(x.total, 1)}`).join(' · ')}`
               : tab === 'rivals'
@@ -413,7 +449,7 @@ const Rentabilidad = () => {
         {!a.trendsReady && <span className="text-xs text-amber-600">Cargando tendencias de futbolfantasy…</span>}
       </div>
 
-      <div className="card p-0 overflow-hidden">
+      <div className="card p-0 overflow-hidden max-w-full">
         <SortableTable rows={filtered} columns={columns} sort={sort} onSort={onSort} />
       </div>
     </div>

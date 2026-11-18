@@ -14,6 +14,9 @@
 > - 2026-11-18 — **Auto-mercado** opcional (desactivado y en simulación por defecto): pone a la venta a valor de mercado los jugadores propios que no estén en el mercado. Nunca acepta ofertas ni puja.
 > - 2026-11-18 — Página de **Ajustes** con la configuración de la automatización.
 > - 2026-11-18 — **Previsión de puntos (xP)** por jugador (media, forma, casa/fuera, probabilidad de jugar de futbolfantasy), **once y capitán recomendados** con formaciones estándar y premium, y fichajes del mercado que mejorarían el once. En la página Rentabilidad (pestaña "Once") y en el informe diario.
+> - 2026-11-18 — Informe: las oportunidades de mercado excluyen jugadores puestos a la venta por otros managers e incluyen los de cláusula abierta o que se abre en ≤ 48 h (precio = cláusula), con calendario de aperturas.
+> - 2026-11-18 — **Inteligencia de rivales**: sobrepuja por manager (valor en la fecha de compra interpolado con el histórico de futbolfantasy), puja sugerida, actividad de 7 días y gasto en subidas de cláusula detectado entre capturas diarias (descontado del dinero estimado).
+> - 2026-11-18 — Rentabilidad: tabla con altura limitada, barra horizontal siempre visible, cabecera y columna de jugador fijas.
 > - 2026-11-18 — Eliminados los workflows de GitHub Actions del original (release automática), no aplicables a este fork.
 
 ---
