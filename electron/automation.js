@@ -3,7 +3,7 @@
  * escritura de archivos, notificaciones y modo `--daily-run` (lanzado por
  * el Programador de tareas de Windows a las 19:05).
  */
-const { app, ipcMain, dialog, shell, Notification, powerSaveBlocker } = require('electron');
+const { app, ipcMain, dialog, shell, Notification, powerSaveBlocker, BrowserWindow, session } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
@@ -11,6 +11,7 @@ const CONFIG_FILE = () => path.join(app.getPath('userData'), 'fantasy-automation
 const SAFE_NAME = /^[A-Za-z0-9._-]{1,80}$/;
 const DAILY_RUN_FLAG = '--daily-run';
 const DAILY_RUN_TIMEOUT_MS = 10 * 60 * 1000;
+const PDF_PARTITION = 'pdf-render'; // sin "persist:" → sesión en memoria, aislada
 
 const isDailyRun = (argv = process.argv) => argv.includes(DAILY_RUN_FLAG);
 
@@ -129,6 +130,44 @@ function registerAutomation({ getMainWindow }) {
             return { success: true, dir, written };
         } catch (error) {
             return { success: false, error: error.message };
+        }
+    });
+
+    // Imprime HTML a PDF en una ventana oculta sin JavaScript y lo guarda en la carpeta de exportación.
+    ipcMain.handle('automation:write-pdf', async (_event, { name, html } = {}) => {
+        if (!SAFE_NAME.test(String(name || '')) || !String(name).toLowerCase().endsWith('.pdf') || typeof html !== 'string') {
+            return { success: false, error: 'Parámetros de PDF no válidos' };
+        }
+        let win = null;
+        try {
+            win = new BrowserWindow({
+                show: false,
+                width: 1400,
+                height: 1000,
+                // Sesión propia y no persistente: el bloqueo de red NO afecta a la ventana principal
+                webPreferences: { javascript: false, sandbox: true, contextIsolation: true, nodeIntegration: false, partition: PDF_PARTITION },
+            });
+            // Bloquear cualquier recurso externo: solo el propio documento
+            session.fromPartition(PDF_PARTITION).webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (_d, cb) => cb({ cancel: true }));
+            await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+            const pdf = await win.webContents.printToPDF({
+                landscape: true,
+                pageSize: 'A4',
+                printBackground: true,
+                preferCSSPageSize: true,
+                margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 },
+            });
+            const dir = getExportDir();
+            fs.mkdirSync(dir, { recursive: true });
+            const target = path.join(dir, name);
+            const tmp = `${target}.tmp`;
+            fs.writeFileSync(tmp, pdf);
+            fs.renameSync(tmp, target);
+            return { success: true, path: target };
+        } catch (error) {
+            return { success: false, error: error.message };
+        } finally {
+            if (win && !win.isDestroyed()) win.destroy();
         }
     });
 

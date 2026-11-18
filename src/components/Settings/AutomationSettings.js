@@ -107,7 +107,7 @@ const AutomationSettings = () => {
           <div>Carpeta del informe:</div>
           <div className="font-mono text-xs bg-gray-100 dark:bg-gray-800 rounded p-2 break-all">{config.exportDir || 'Solo disponible en la app de escritorio'}</div>
           <div className="text-xs text-gray-500">
-            Elige una carpeta de tu <b>Google Drive</b> (p. ej. <code>G:\Mi unidad\Fantasy</code>) para que el informe se suba solo. Se guardan <code>informe-fantasy.md</code> y <code>plantilla.json</code>, sobrescribiendo los del día anterior.
+            Elige una carpeta de tu <b>Google Drive</b> (p. ej. <code>G:\Mi unidad\Fantasy</code>) para que el informe se suba solo. Se guardan <code>informe-fantasy.pdf</code> (para leerlo en el móvil o el PC), <code>informe-fantasy.md</code> y <code>plantilla.json</code> (para Claude), sobrescribiendo los del día anterior.
           </div>
           {ea && (
             <div className="flex flex-wrap gap-2 pt-1">

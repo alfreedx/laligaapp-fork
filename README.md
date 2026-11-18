@@ -21,6 +21,7 @@
 > - 2026-11-19 — **Protección de la plantilla**: jugadores propios con cláusula abierta o que se abre en ≤ 48 h, rivales que pueden pagarla y recomendación (blindar / subir cláusula con coste razonable / asumible).
 > - 2026-11-19 — **Avisos de apertura de cláusulas** de rivales (notificación de Windows con la app abierta).
 > - 2026-11-19 — Rentabilidad, "Mercado hoy": sin los jugadores propios.
+> - 2026-11-19 — Informe también en **PDF** (`informe-fantasy.pdf`, A4 horizontal) para leerlo en móvil y PC sin visores especiales; generado en una ventana oculta sin JavaScript ni red.
 > - 2026-11-18 — Eliminados los workflows de GitHub Actions del original (release automática), no aplicables a este fork.
 
 ---

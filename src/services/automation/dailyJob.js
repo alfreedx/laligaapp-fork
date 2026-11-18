@@ -12,10 +12,12 @@ import { runAutoMarket } from './autoMarket';
 import { buildDailyReport, buildSnapshot } from './report';
 import { loadSettings, loadState, saveState, writeJson, readJson, snapshotFile } from './localStore';
 import { clauseRaisesBetween } from '../analytics/rivalIntel';
+import { reportHtmlDocument } from './mdToHtml';
 import { buildPredictionRecord, actualPointsForWeek, evaluateWeek } from '../analytics/backtest';
 
 export const REPORT_FILE = 'informe-fantasy.md';
 export const DATA_FILE = 'plantilla.json';
+export const PDF_FILE = 'informe-fantasy.pdf';
 
 /** Último instante programado (hh:mm) que ya ha pasado respecto a `now`. */
 export const lastScheduledSlot = (now, hour, minute) => {
@@ -107,13 +109,20 @@ export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual
       }
       if (!exportResult.success) throw new Error(`No se pudo escribir el informe: ${exportResult.error}`);
 
+      // PDF legible en móvil y PC (Google Drive lo previsualiza sin apps extra)
+      let pdfError = null;
+      if (ea?.writePdf) {
+        const pdf = await ea.writePdf(PDF_FILE, reportHtmlDocument(report.markdown, `Informe Fantasy ${localDate()}`));
+        if (!pdf?.success) pdfError = pdf?.error || 'error desconocido';
+      }
+
       const listed = autoMarketLog.filter((l) => l.status === 'listed').length;
       const newState = {
         ...state,
         lastRunAt: startedAt,
         lastSuccessAt: new Date().toISOString(),
         lastSource: source,
-        lastError: null,
+        lastError: pdfError ? `Informe generado, pero el PDF falló: ${pdfError}` : null,
         lastExportDir: exportResult.dir,
         lastAutoMarket: autoMarketLog,
         lastCounts: report.counts,

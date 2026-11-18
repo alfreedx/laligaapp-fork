@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     chooseExportDir: () => ipcRenderer.invoke('automation:choose-export-dir'),
     openExportDir: () => ipcRenderer.invoke('automation:open-export-dir'),
     writeExport: (files) => ipcRenderer.invoke('automation:write-export', files),
+    writePdf: (name, html) => ipcRenderer.invoke('automation:write-pdf', { name, html }),
     notify: (title, body) => ipcRenderer.invoke('automation:notify', { title, body }),
     dailyRunFinished: (reason) => ipcRenderer.invoke('automation:daily-run-finished', reason),
     onRunNow: (cb) => {
