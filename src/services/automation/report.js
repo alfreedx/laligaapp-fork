@@ -6,6 +6,7 @@
 import {
   buildSquadRows, buildMarketRows, buildRivalRows, buildMoneyRows, buildSalesRows,
 } from '../analytics/rows';
+import { bestLineup } from '../analytics/forecast';
 
 const H48 = 48 * 3600 * 1000;
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -99,6 +100,20 @@ export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], play
   const clauseSport = rivals.filter((r) => !r.isShielded && (r.clauseIsOpen || (r.clauseOpenAt && new Date(r.clauseOpenAt) - now <= H48)) && r.status === 'ok' && isNum(r.averagePoints))
     .sort((a, b) => b.averagePoints - a.averagePoints).slice(0, 6);
 
+  // ---- once recomendado y fichajes que lo mejoran ----
+  const lineup = bestLineup(squad);
+  const venue = (r) => (r.nextIsHome === true ? 'casa' : r.nextIsHome === false ? 'fuera' : '');
+  const doubtfulStarters = lineup.starters.filter((p) => p.playProb < 0.6);
+  const worstStarter = {};
+  lineup.starters.forEach((p) => {
+    if (!worstStarter[p.positionId] || p.xp < worstStarter[p.positionId].xp) worstStarter[p.positionId] = p;
+  });
+  const upgrades = market
+    .filter((r) => r.positionId !== 5 && isNum(r.xp) && worstStarter[r.positionId] && r.xp > worstStarter[r.positionId].xp + 0.5)
+    .map((r) => ({ r, replaces: worstStarter[r.positionId], delta: r.xp - worstStarter[r.positionId].xp }))
+    .sort((a, b) => b.delta - a.delta)
+    .slice(0, 6);
+
   const md = [];
   md.push(`# Informe LaLiga Fantasy${leagueName ? ` — ${leagueName}` : ''}`);
   md.push(`Generado: ${now.toLocaleString('es-ES')} · Jornada ${data.week ?? '?'}${data.weekInfo?.openingWeekDate ? ` (empieza ${dt(data.weekInfo.openingWeekDate)})` : ''}`);
@@ -115,6 +130,33 @@ export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], play
   md.push('## ⚠️ Avisos');
   md.push(alerts.length ? alerts.map((a) => `- ${a}`).join('\n') : '- Nada urgente.');
   md.push('');
+
+  md.push(`## 🧠 Once recomendado — jornada ${data.week ?? '?'} (${lineup.formation})`);
+  md.push(`Previsión total: **${N(lineup.total)} pts** (incluye capitán ×2 y entrenador). xP = puntos esperados; Prob = probabilidad de jugar (futbolfantasy si existe).`);
+  md.push('');
+  md.push(table(['', 'Jugador', 'Pos', 'Rival', 'xP', 'Prob', 'Media', 'Forma 3j'],
+    [...lineup.starters].sort((a, b) => a.positionId - b.positionId || b.xp - a.xp).map((p) => [
+      lineup.captain?.id === p.id ? '©' : '', p.name, p.position, p.nextRival ? `${p.nextRival} (${venue(p)})` : '—',
+      N(p.xp), `${Math.round(p.playProb * 100)} %${p.probSource !== 'futbolfantasy' ? '*' : ''}`, N(p.averagePoints, 2), N(p.form),
+    ])));
+  if (lineup.coach) md.push(`\nEntrenador: **${lineup.coach.name}** (xP ${N(lineup.coach.xp)}) · Capitán: **${lineup.captain?.name || '—'}**`);
+  const altF = lineup.ranking.filter((r) => !r.missing).slice(1, 3).map((r) => `${r.formation} (${N(r.total)})`);
+  if (altF.length) md.push(`Alternativas: ${altF.join(', ')}`);
+  const benchTop = lineup.bench.slice(0, 4).map((p) => `${p.name} ${N(p.xp)}`);
+  if (benchTop.length) md.push(`Mejores suplentes: ${benchTop.join(', ')}`);
+  if (doubtfulStarters.length) md.push(`⚠️ Titulares con probabilidad < 60 %: ${doubtfulStarters.map((p) => `${p.name} (${Math.round(p.playProb * 100)} %)`).join(', ')} — revisa los onces probables antes del cierre.`);
+  md.push('_* probabilidad estimada (futbolfantasy no da dato para ese jugador)._');
+  md.push('');
+
+  if (upgrades.length) {
+    md.push('## ➕ Fichajes del mercado que mejorarían tu once');
+    md.push(table(['Jugador', 'Pos', 'Rival', 'xP', 'Sustituye a', 'Mejora', 'Precio', '¿Te llega?'],
+      upgrades.map(({ r, replaces, delta }) => [
+        r.name, r.position, r.nextRival ? `${r.nextRival} (${venue(r)})` : '—', N(r.xp), `${replaces.name} (${N(replaces.xp)})`,
+        `+${N(delta)}`, M(r.buyPrice), isNum(data.myMoney) && data.myMoney >= r.buyPrice ? 'sí' : 'vendiendo',
+      ])));
+    md.push('');
+  }
 
   if (offers.length || offersNoDetail.length) {
     md.push('## 📩 Ofertas recibidas (mejor oferta por jugador)');
@@ -222,6 +264,16 @@ export const buildDailyReport = (data, { settings = {}, autoMarketLog = [], play
     jugadores: squad.filter((r) => r.positionId !== 5).map(pick),
     entrenadores: squad.filter((r) => r.positionId === 5).map(pick),
     avisos: alerts,
+    onceRecomendado: {
+      formacion: lineup.formation,
+      puntosPrevistos: lineup.total,
+      capitan: lineup.captain?.name || null,
+      entrenador: lineup.coach?.name || null,
+      titulares: lineup.starters.map((p) => ({ nombre: p.name, posicion: p.position, xP: p.xp, probJugar: p.playProb, rival: p.nextRival, casa: p.nextIsHome })),
+      suplentes: lineup.bench.map((p) => ({ nombre: p.name, posicion: p.position, xP: p.xp })),
+      alternativas: lineup.ranking,
+    },
+    fichajesQueMejoranElOnce: upgrades.map(({ r, replaces, delta }) => ({ jugador: r.name, posicion: r.position, xP: r.xp, sustituyeA: replaces.name, mejora: delta, precio: r.buyPrice, vende: r.seller })),
     ofertasRecibidas: offers.map((o) => ({ jugador: o.r.name, precioCompra: o.r.buyPrice, valor: o.r.value, oferta: o.best.money, de: o.from, gananciaSiAceptas: o.gain, expira: o.best.expirationDate })),
     mercadoEconomico: econ.map((r) => ({ ...pick(r), vende: r.seller, precio: r.buyPrice, expira: r.expiration })),
     mercadoDeportivo: sport.map((r) => ({ ...pick(r), vende: r.seller, precio: r.buyPrice })),

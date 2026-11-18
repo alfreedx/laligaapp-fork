@@ -144,6 +144,16 @@ export const parseMarketData = (htmlText) => {
         aceleracion: numAttr('aceleracion'),
       };
 
+      // Próximo partido y probabilidad de jugar (columna "Próx. rival")
+      const rivalMatch = elementText.match(/title="Jornada (\d+) · Próximo rival: ([^"(]+?) \((Casa|Fuera)\)"/);
+      const probMatch = elementText.match(/probabilidad-widget"><span class="prob-\d+"[^>]*>(\d+)%/);
+      const nextMatch = {
+        nextWeek: rivalMatch ? parseInt(rivalMatch[1], 10) : null,
+        nextRival: rivalMatch ? rivalMatch[2].trim() : null,
+        nextIsHome: rivalMatch ? rivalMatch[3] === 'Casa' : null,
+        playProbability: probMatch ? parseInt(probMatch[1], 10) / 100 : null,
+      };
+
       const normalizedName = normalizePlayerName(nombre);
       const normalizedPositionStr = normalizePosition(posicion);
       const normalizedTeamNameStr = normalizeTeamName(teamName);
@@ -160,6 +170,7 @@ export const parseMarketData = (htmlText) => {
         equipoId: equipoId,
         valor: valorNumerico,
         ...history,
+        ...nextMatch,
         diferencia1: diferenciaNumerico,
         tendencia: diferenciaNumerico > 0 ? '📈' : diferenciaNumerico < 0 ? '📉' : '➡️',
         porcentaje: porcentajeNumerico,

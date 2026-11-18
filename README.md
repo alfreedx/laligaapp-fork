@@ -13,6 +13,7 @@
 > - 2026-11-18 — **Informe diario automático** (`informe-fantasy.md` + `plantilla.json`) tras el reseteo del mercado: avisos, ofertas recibidas con ganancia si aceptas, oportunidades de mercado (económicas y deportivas), cláusulas que se abren en 48 h, dinero de rivales. Captura local diaria de valores. Modo `--daily-run` para el Programador de tareas de Windows e instancia única.
 > - 2026-11-18 — **Auto-mercado** opcional (desactivado y en simulación por defecto): pone a la venta a valor de mercado los jugadores propios que no estén en el mercado. Nunca acepta ofertas ni puja.
 > - 2026-11-18 — Página de **Ajustes** con la configuración de la automatización.
+> - 2026-11-18 — **Previsión de puntos (xP)** por jugador (media, forma, casa/fuera, probabilidad de jugar de futbolfantasy), **once y capitán recomendados** con formaciones estándar y premium, y fichajes del mercado que mejorarían el once. En la página Rentabilidad (pestaña "Once") y en el informe diario.
 > - 2026-11-18 — Eliminados los workflows de GitHub Actions del original (release automática), no aplicables a este fork.
 
 ---

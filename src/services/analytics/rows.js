@@ -4,6 +4,7 @@
  */
 import { getAcquisition, estimateMoney } from './ledger';
 import { computeProfitability } from './valuation';
+import { forecastPoints } from './forecast';
 
 export const POSITION_LABEL = { 1: 'POR', 2: 'DEF', 3: 'MED', 4: 'DEL', 5: 'ENT' };
 
@@ -49,6 +50,7 @@ export const buildSquadRows = ({ team, ledger, resolveTrend, rateMode = 'daily' 
       marketOffers: pt.playerMarket?.numberOfOffers ?? null,
       playerTeamId: pt.playerTeamId,
       ...clauseInfo(pt),
+      ...forecastPoints(pm, trend),
       ...computeProfitability({
         buyPrice: acq?.price ?? null,
         value: pm?.marketValue,
@@ -74,6 +76,7 @@ export const buildMarketRows = ({ market, ownerByPlayer, resolveTrend, rateMode 
       sellerId: owner?.managerId || null,
       expiration: m.expirationDate || null,
       bids: m.numberOfBids ?? m.numberOfOffers ?? 0,
+      ...forecastPoints(pm, trend),
       ...computeProfitability({
         buyPrice: m.salePrice ?? pm.marketValue,
         value: pm.marketValue,
@@ -108,6 +111,7 @@ export const buildRivalRows = ({ teams, myTeamId, ledger, resolveTrend, rateMode
       const ci = clauseInfo(pt);
       rows.push({
         ...baseInfo(pm),
+        ...forecastPoints(pm, trend),
         owner: team.managerName,
         ownerId: team.managerId,
         acquiredVia: acq?.via || 'inicial',

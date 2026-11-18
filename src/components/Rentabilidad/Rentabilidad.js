@@ -5,6 +5,7 @@ import {
   buildSquadRows, buildMarketRows, buildRivalRows, buildMoneyRows, buildSalesRows,
 } from '../../services/analytics/rows';
 import { DEFAULT_INITIAL_MONEY } from '../../services/analytics/ledger';
+import { bestLineup } from '../../services/analytics/forecast';
 import { getClauseTimeRemaining } from '../../utils/clauseUtils';
 import LoadingState from '../Common/LoadingState';
 import ErrorState from '../Common/ErrorState';
@@ -51,7 +52,11 @@ const profitCols = (n) => [
   col('roiPct', 'ROI', { fmt: fmtPct, num: true, colored: true }),
 ];
 
+const venueTxt = (r) => (r.nextRival ? `${r.nextRival} ${r.nextIsHome === true ? '🏠' : r.nextIsHome === false ? '✈️' : ''}` : '—');
 const sportCols = [
+  col('xp', 'xP', { fmt: (v) => fmtNum(v, 1), num: true, title: 'Puntos esperados próxima jornada (media, forma, casa/fuera, prob. de jugar)' }),
+  col('playProb', 'Prob', { fmt: (v) => (isNum(v) ? `${Math.round(v * 100)} %` : '—'), num: true, title: 'Probabilidad de jugar (futbolfantasy; * = estimada)', render: (r) => (isNum(r.playProb) ? `${Math.round(r.playProb * 100)} %${r.probSource === 'estimada' ? '*' : ''}` : '—') }),
+  col('nextRival', 'Rival', { render: venueTxt }),
   col('points', 'Pts', { fmt: (v) => fmtNum(v, 0), num: true }),
   col('averagePoints', 'Media', { fmt: (v) => fmtNum(v, 2), num: true }),
   col('pointsPerMillion', 'Pts/M', { fmt: (v) => fmtNum(v, 2), num: true, title: 'Puntos por millón de valor' }),
@@ -59,6 +64,7 @@ const sportCols = [
 
 const TABS = {
   squad: { label: 'Mi equipo' },
+  lineup: { label: 'Once' },
   market: { label: 'Mercado hoy' },
   rivals: { label: 'Rivales' },
   money: { label: 'Dinero rivales' },
@@ -118,6 +124,14 @@ const columnsFor = (tab, n) => {
         money('spent', 'Gastado'),
         money('earned', 'Ingresado ventas'),
         money('prizes', 'Premios'),
+      ];
+    case 'lineup':
+      return [
+        col('role', '', { render: (r) => r.role }),
+        ...playerCols,
+        ...sportCols,
+        col('form', 'Forma 3j', { fmt: (v) => fmtNum(v, 1), num: true, title: 'Media de puntos de las 3 últimas jornadas' }),
+        money('value', 'Valor'),
       ];
     case 'sales':
       return [
@@ -225,6 +239,7 @@ const DEFAULT_SORT = {
   market: { key: 'gainNLaLiga', dir: 'desc' },
   rivals: { key: 'clauseGainN', dir: 'desc' },
   money: { key: 'calibrated', dir: 'desc' },
+  lineup: { key: 'order', dir: 'asc' },
   sales: { key: 'sellDate', dir: 'desc' },
 };
 
@@ -242,6 +257,21 @@ const Rentabilidad = () => {
     let r;
     switch (tab) {
       case 'squad': r = buildSquadRows({ ...common, team: a.myTeam }); break;
+      case 'lineup': {
+        const squad = buildSquadRows({ ...common, team: a.myTeam });
+        const lu = bestLineup(squad);
+        const startIds = new Set(lu.starters.map((p) => p.id));
+        const tag = (p) => {
+          if (lu.captain?.id === p.id) return '© Capitán';
+          if (lu.coach?.id === p.id) return '🧑‍💼 Entrenador';
+          if (startIds.has(p.id)) return '⚽ Titular';
+          return p.positionId === 5 ? '— Entrenador' : '🪑 Suplente';
+        };
+        const rank = (p) => (lu.captain?.id === p.id ? 0 : startIds.has(p.id) ? 1 : lu.coach?.id === p.id ? 2 : 3);
+        r = squad.map((p) => ({ ...p, role: tag(p), order: rank(p) * 100 + (p.positionId || 9) * 10 - (p.xp || 0) / 10 }));
+        r.lineupMeta = { formation: lu.formation, total: lu.total, ranking: lu.ranking };
+        return r;
+      }
       case 'market': r = buildMarketRows({ ...common, market: a.market, ownerByPlayer: a.ownerByPlayer }); break;
       case 'rivals': r = buildRivalRows({ ...common, teams: a.teams, myTeamId: a.myTeamId }); break;
       case 'money': return buildMoneyRows({ teams: a.teams, ledger: a.ledger, myTeam: a.myTeam, myMoney: a.myMoney, initialMoney: DEFAULT_INITIAL_MONEY });
@@ -327,6 +357,8 @@ const Rentabilidad = () => {
           <div className="card p-3 col-span-1 md:col-span-3 text-xs text-gray-500 flex items-center">
             {tab === 'money'
               ? `Dinero inicial supuesto: ${fmtM(DEFAULT_INITIAL_MONEY, 0)}. "Ajustado" aplica a todos el desvío de tu propio saldo (gastos que la actividad no muestra, como subir cláusulas o blindar).`
+              : tab === 'lineup' && rows.lineupMeta
+                ? `Formación recomendada: ${rows.lineupMeta.formation} · ${fmtNum(rows.lineupMeta.total, 1)} pts previstos (capitán ×2 + entrenador). Alternativas: ${rows.lineupMeta.ranking.filter((x) => !x.missing).slice(1, 4).map((x) => `${x.formation} ${fmtNum(x.total, 1)}`).join(' · ')}`
               : tab === 'rivals'
                 ? '"Tu g. LaLiga" = lo que ganarías si clausulas hoy y LaLiga te ofrece +10 % al final del periodo.'
                 : `${filtered.length} jugadores`}
