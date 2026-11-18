@@ -49,3 +49,20 @@ test('genera markdown, HTML visual y JSON; escapa nombres de la API', () => {
   expect(r.json.onceRecomendado.titulares).toHaveLength(11);
   expect(r.json.queHacerHoy.length).toBeGreaterThan(0);
 });
+
+test('oportunidades: puja máxima rentable, rentabilidad y a quién mejoran de la alineación guardada', () => {
+  const rival = { playerTeamId: 'rx', buyoutClause: 10e6, buyoutClauseLockedEndTime: null, playerMaster: pm('77', 'Crack', 3, { averagePoints: 12, lastStats: [{ weekNumber: 12, totalPoints: 12 }] }) };
+  const teams = [data.teams[0], { ...data.teams[1], players: [rival] }];
+  const trend = { valor: 10e6, valor1: 9.8e6, valor3: 9.4e6, diferencia1: 200e3, playProbability: 1 };
+  const r = buildDailyReport({
+    ...data, teams, myMoney: 50e6,
+    currentLineupIds: new Set(['1', '3', '4', '5', '7', '8', '9', '10', '11', '12', '13']),
+    resolveTrend: (p) => (p.id === '77' ? trend : null), trendsOk: true,
+  }, { settings: { projectionDays: 5 } });
+  const opp = r.json.oportunidadesDeportivas.find((o) => o.nombre === 'Crack');
+  // valor en 5 días = 10 M + 5 × 200 K = 11 M → LaLiga +10 % = 12,1 M
+  expect(opp.pujaMaxRentable).toBe(12_100_000);
+  expect(opp.rentabilidadPct).toBeCloseTo(21);
+  expect(opp.mejoraA).toMatch(/^Jugador(7|8|9|10)$/);
+  expect(opp.mejoraPts).toBeGreaterThan(0);
+});

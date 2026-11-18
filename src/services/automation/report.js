@@ -59,7 +59,7 @@ export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leag
       const expectedCost = isNum(r.buyPrice) && ov?.n >= 5 && isNum(ov.median)
         ? r.buyPrice * (1 + Math.max(0, ov.median) / 100) : r.buyPrice;
       return {
-        ...r, origin: 'Mercado', from: 'LaLiga', price: r.buyPrice, expectedCost,
+        ...r, origin: 'Mercado', from: 'LaLiga', price: r.buyPrice, cost: expectedCost,
         available: `hasta ${dt(r.expiration)}`, bid: suggestedBid(r.buyPrice, ov),
         gainN: isNum(r.valueN) && isNum(expectedCost) ? r.valueN - expectedCost : null,
         gainNLaLiga: isNum(r.laLigaN) && isNum(expectedCost) ? r.laLigaN - expectedCost : null,
@@ -68,22 +68,45 @@ export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leag
     ...rivals
       .filter((r) => !r.isShielded && isNum(r.clause) && (r.clauseIsOpen || (r.clauseOpenAt && new Date(r.clauseOpenAt) - now <= H48)))
       .map((r) => ({
-        ...r, origin: 'Cláusula', from: r.owner, price: r.clause,
+        ...r, origin: 'Cláusula', from: r.owner, price: r.clause, cost: r.clause,
         available: r.clauseIsOpen ? 'abierta' : `se abre ${dt(r.clauseOpenAt)}`,
         gainN: isNum(r.valueN) ? r.valueN - r.clause : null,
         gainNLaLiga: isNum(r.laLigaN) ? r.laLigaN - r.clause : null,
       })),
-  ];
+  ].map((r) => ({
+    ...r,
+    // Puja máxima rentable: lo máximo que puedes pagar sin perder dinero si lo vendes a
+    // LaLiga (mejor oferta, +10 %) dentro de N días al ritmo actual.
+    maxBid: isNum(r.laLigaN) ? Math.floor(r.laLigaN / 100_000) * 100_000 : null,
+    roiN: isNum(r.gainNLaLiga) && isNum(r.cost) && r.cost > 0 ? (r.gainNLaLiga / r.cost) * 100 : null,
+  })).map((r) => ({
+    ...r,
+    // La puja habitual para ganarlo ya no deja beneficio
+    bidTooHigh: r.origin === 'Mercado' && isNum(r.bid) && isNum(r.maxBid) && r.bid > r.maxBid,
+  }));
   const econ = candidates.filter((r) => isNum(r.gainNLaLiga) && r.gainNLaLiga >= 500_000).sort((a, b) => b.gainNLaLiga - a.gainNLaLiga).slice(0, 6);
-  const sport = candidates.filter((r) => r.status === 'ok' && r.positionId !== 5 && isNum(r.xp)).sort((a, b) => b.xp - a.xp).slice(0, 6);
+  // Se ordena de nuevo más abajo, cuando se sabe a quién mejora cada uno
+  const sport = candidates.filter((r) => r.status === 'ok' && r.positionId !== 5 && isNum(r.xp)).sort((a, b) => b.xp - a.xp).slice(0, 12);
   const clauseSoon = candidates.filter((r) => r.origin === 'Cláusula' && !r.clauseIsOpen).sort((a, b) => new Date(a.clauseOpenAt) - new Date(b.clauseOpenAt));
 
   // Once recomendado, banquillo (mejor suplente por línea) y fichajes que lo mejoran
   const lineup = bestLineup(squad);
   const benchByLine = [1, 2, 3, 4].map((pos) => lineup.bench.find((p) => p.positionId === pos)).filter(Boolean);
   const doubtful = lineup.starters.filter((p) => p.playProb < 0.6);
+  // Referencia para "a quién mejora": tu alineación GUARDADA (si se pudo leer); si no, la recomendada
+  const savedStarters = squad.filter((r) => data.currentLineupIds?.has(r.id) && r.positionId !== 5);
+  const usingSaved = savedStarters.length >= 10;
+  const reference = usingSaved ? savedStarters : lineup.starters;
   const worst = {};
-  lineup.starters.forEach((p) => { if (!worst[p.positionId] || p.xp < worst[p.positionId].xp) worst[p.positionId] = p; });
+  reference.filter((p) => isNum(p.xp)).forEach((p) => { if (!worst[p.positionId] || p.xp < worst[p.positionId].xp) worst[p.positionId] = p; });
+  // Para cada candidato: a qué titular de tu alineación superaría y por cuántos puntos
+  candidates.forEach((r) => {
+    const w = worst[r.positionId];
+    r.improves = r.positionId !== 5 && w && isNum(r.xp) && r.xp > w.xp + 0.3 ? { name: w.name, delta: r.xp - w.xp } : null;
+  });
+  // Deportivas: primero las que mejoran tu once (por puntos ganados), luego el resto por xP
+  sport.sort((a, b) => ((b.improves?.delta ?? -1) - (a.improves?.delta ?? -1)) || (b.xp - a.xp));
+  sport.splice(6);
   // Solo fichajes realistas: con tu saldo, o con tu saldo + aceptar las ofertas que te dan ganancia
   const cash = isNum(data.myMoney) ? Math.max(0, data.myMoney) : 0;
   const cashWithOffers = cash + goodOffers.reduce((s, o) => s + o.money, 0);
@@ -132,7 +155,7 @@ export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leag
     kind: 'buy', icon: '➕', text: `Ficha a **${r.name}** (${r.origin === 'Cláusula' ? `cláusula de ${r.from}, ${r.available}` : `mercado, ${r.available}`}) por ${M(r.price)}: **+${N(delta)} pts** por jornada frente a ${replaces.name}${affordable ? '' : ' (aceptando antes alguna oferta)'}.`,
   }));
   econ.filter((r) => !upgrades.some((u) => u.r.id === r.id) && r.price <= cashWithOffers && r.gainNLaLiga >= 1_000_000).slice(0, 2).forEach((r) => actions.push({
-    kind: 'buy', icon: '📈', text: `Inversión: **${r.name}** (${r.origin === 'Cláusula' ? `cláusula de ${r.from}, ${r.available}` : `mercado${r.bid ? `, puja ~${M(r.bid)}` : ''}`}) → **${SM(r.gainNLaLiga)}** en ${days} días vendiéndolo a LaLiga.`,
+    kind: 'buy', icon: '📈', text: `Inversión: **${r.name}** (${r.origin === 'Cláusula' ? `cláusula de ${r.from}, ${r.available}` : `mercado${r.bid ? `, puja ~${M(r.bid)}` : ''}, no pases de ${M(r.maxBid)}`}) → **${SM(r.gainNLaLiga)}** (${PCT(r.roiN)}) en ${days} días vendiéndolo a LaLiga.`,
   }));
   actions.push({
     kind: 'lineup', icon: '🧠', text: `Alinea **${lineup.formation}** con **${lineup.captain?.name || '—'}** de capitán${lineup.coach ? ` y ${lineup.coach.name} de entrenador` : ''} (${N(lineup.total)} pts previstos). En la app: Mi Alineación → Cargar recomendada.${doubtful.length ? ` Ojo con ${doubtful.map((p) => p.name).join(', ')} (puede${doubtful.length > 1 ? 'n' : ''} no jugar).` : ''}`,
@@ -147,7 +170,7 @@ export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leag
       gainLaLiga: sum(squad, 'latentGainLaLiga'), gainLaLigaN: data.trendsOk ? sum(squad, 'gainNLaLiga') : null,
     },
     actions: actions.slice(0, 7),
-    lineup, benchByLine, doubtful,
+    lineup, benchByLine, doubtful, usingSaved,
     offers, goodOffers,
     mustProtect, acceptable,
     econ, sport, clauseSoon, upgrades,
@@ -210,14 +233,20 @@ export const renderMarkdown = (m) => {
 
   md.push(`## 💰 Oportunidades económicas (vender a LaLiga en ${m.days} días)`);
   md.push('_En mercado, la ganancia ya descuenta la sobrepuja típica de la liga._');
-  md.push(m.econ.length ? table(['Jugador', 'Origen', 'Precio', 'Tendencia/día', `Gana en ${m.days}d`, 'Disponible'],
-    m.econ.map((r) => [`${r.name} (${r.position})`, r.origin === 'Mercado' ? 'Mercado' : `Cláusula ${r.from}`, `${M(r.price)}${r.bid ? ` · puja ~${M(r.bid)}` : ''}`, `${trendArrow(r.growthAvg3)} ${K(r.growthAvg3)}`, SM(r.gainNLaLiga), r.available]))
+  md.push(m.econ.length ? table(['Jugador', 'Origen', 'Precio', 'Puja máx. rentable', `Gana en ${m.days}d`, 'Rentab.', 'Tendencia/día', 'Disponible'],
+    m.econ.map((r) => [`${r.name} (${r.position})`, r.origin === 'Mercado' ? 'Mercado' : `Cláusula ${r.from}`, `${M(r.price)}${r.bid ? ` · puja ~${M(r.bid)}` : ''}`, `${M(r.maxBid)}${r.bidTooHigh ? ' ⚠️' : ''}`, SM(r.gainNLaLiga), PCT(r.roiN), `${trendArrow(r.growthAvg3)} ${K(r.growthAvg3)}`, r.available]))
     : 'Ninguna con ganancia esperada.');
+  md.push(`_Puja máx. rentable = lo máximo que puedes pagar sin perder dinero vendiéndolo a LaLiga en ${m.days} días. ⚠️ = la puja habitual de tu liga ya la supera._`);
   md.push('');
 
-  md.push('## ⚽ Oportunidades deportivas (más puntos esperados)');
-  md.push(m.sport.length ? table(['Jugador', 'Origen', 'Precio', 'xP', 'Juega', 'Rival', 'Disponible'],
-    m.sport.map((r) => [`${r.name} (${r.position})`, r.origin === 'Mercado' ? 'Mercado' : `Cláusula ${r.from}`, M(r.price), N(r.xp), `${Math.round((r.playProb ?? 0) * 100)} %`, r.nextRival ? `${venue(r)} ${r.nextRival}` : '—', r.available]))
+  md.push(`## ⚽ Oportunidades deportivas (más puntos esperados · comparado con tu alineación ${m.usingSaved ? 'actual' : 'recomendada'})`);
+  md.push(m.sport.length ? table(['Jugador', 'Origen', 'Precio', 'xP', 'Mejora a', 'Próximo (juega)', 'Puja máx. rentable', `Rentab. ${m.days}d`, 'Disponible'],
+    m.sport.map((r) => [
+      `${r.name} (${r.position})`, r.origin === 'Mercado' ? 'Mercado' : `Cláusula ${r.from}`, M(r.price), N(r.xp),
+      r.improves ? `${r.improves.name} (+${N(r.improves.delta)})` : 'no mejora',
+      `${r.nextRival ? `${venue(r)} ${r.nextRival} ` : ''}(${Math.round((r.playProb ?? 0) * 100)} %)`,
+      M(r.maxBid), PCT(r.roiN), r.available,
+    ]))
     : '—');
   md.push('');
 
@@ -290,8 +319,8 @@ const buildJson = (m) => {
     },
     fichajesQueMejoranElOnce: m.upgrades.map(({ r, replaces, delta }) => ({ jugador: r.name, posicion: r.position, origen: r.origin, de: r.from, xP: r.xp, sustituyeA: replaces.name, mejora: delta, precio: r.price, disponible: r.available })),
     ofertasRecibidas: m.offers.map((o) => ({ jugador: o.r.name, precioCompra: o.r.buyPrice, valor: o.r.value, oferta: o.money, de: o.from, gananciaSiAceptas: o.gain, expira: o.expires })),
-    oportunidadesEconomicas: m.econ.map((r) => ({ ...pick(r), origen: r.origin, de: r.from, precio: r.price, pujaSugerida: r.bid || null, disponible: r.available })),
-    oportunidadesDeportivas: m.sport.map((r) => ({ ...pick(r), origen: r.origin, de: r.from, precio: r.price, disponible: r.available })),
+    oportunidadesEconomicas: m.econ.map((r) => ({ ...pick(r), origen: r.origin, de: r.from, precio: r.price, costeEsperado: r.cost, pujaSugerida: r.bid || null, pujaMaxRentable: r.maxBid, rentabilidadPct: r.roiN, disponible: r.available })),
+    oportunidadesDeportivas: m.sport.map((r) => ({ ...pick(r), origen: r.origin, de: r.from, precio: r.price, mejoraA: r.improves?.name || null, mejoraPts: r.improves?.delta ?? null, pujaMaxRentable: r.maxBid, rentabilidadPct: r.roiN, disponible: r.available })),
     clausulasProximas48h: m.clauseSoon.map((r) => ({ ...pick(r), dueño: r.owner, seAbre: r.clauseOpenAt, precio: r.clause })),
     proteccion: m._raw.protection.map((p) => ({ jugador: p.name, titular: p.isStarter, xP: p.xp, clausula: p.clause, abierta: p.clauseIsOpen, seAbre: p.clauseOpenAt, puedenPagarla: p.canPay, recomendacion: p.action, motivo: p.reason, subirA: p.targetClause, costeEstimado: p.raiseCost })),
     rivales: m.rivalsTable.map((r) => ({ manager: r.name, yo: r.isMe, puesto: r.position, puntos: r.points, dineroEstimado: r.calibrated, valorEquipo: r.teamValue, sobrepujaMedianaPct: r.overbid, compras7d: r.buys7, ventas7d: r.sells7 })),

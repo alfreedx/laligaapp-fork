@@ -42,13 +42,23 @@ export const loadLeagueData = async ({ leagueId, user }) => {
     await sleep(250);
   }
 
-  const [activity, marketRes, moneyRes, weekRes, allPlayersRes] = await Promise.all([
+  const [activity, marketRes, moneyRes, weekRes, allPlayersRes, lineupRes] = await Promise.all([
     fetchAllActivity(leagueId),
     fantasyAPI.getMarket(leagueId),
     fantasyAPI.getTeamMoney(myTeamId),
     fantasyAPI.getCurrentWeek().catch(() => null),
     fantasyAPI.getAllPlayers().catch(() => null),
+    fantasyAPI.getCurrentLineup(myTeamId).catch(() => null),
   ]);
+
+  // Titulares de mi alineación guardada (ids de playerMaster)
+  const lineupFormation = (lineupRes?.data || lineupRes)?.formation || {};
+  const currentLineupIds = new Set(
+    ['goalkeeper', 'defender', 'midfield', 'striker']
+      .flatMap((k) => (Array.isArray(lineupFormation[k]) ? lineupFormation[k] : lineupFormation[k] ? [lineupFormation[k]] : []))
+      .map((p) => String(p?.playerMaster?.id ?? ''))
+      .filter(Boolean)
+  );
 
   // Todos los jugadores de LaLiga por id (nombres de vendidos, tendencias por id)
   const allPlayersById = new Map();
@@ -99,6 +109,7 @@ export const loadLeagueData = async ({ leagueId, user }) => {
     ledger: buildLedger(activity),
     ownerByPlayer,
     myOffers,
+    currentLineupIds,
     resolveTrend,
     trendById,
     allPlayersById,

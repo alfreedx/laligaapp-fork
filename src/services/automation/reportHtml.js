@@ -59,6 +59,9 @@ const CSS = `
   td { padding: 3.5px 6px; border-bottom: 1px solid #eef0f3; vertical-align: middle; }
   tbody tr:nth-child(even) td { background: #fafafa; }
   tr { page-break-inside: avoid; }
+  table.compact { font-size: 8.2pt; }
+  table.compact td, table.compact th { padding: 3px 4px; }
+  table.compact td:nth-child(3), table.compact td:nth-child(7) { white-space: nowrap; }
   .pos { color: #047857; font-weight: 600; }
   .neg { color: #b91c1c; font-weight: 600; }
   .muted { color: #9ca3af; }
@@ -128,15 +131,28 @@ export const renderReportHtml = (m) => {
 
   // Oportunidades
   parts.push(section(`💰 Oportunidades económicas · vender a LaLiga en ${m.days} días`,
-    m.econ.length ? table(['Jugador', 'Origen', 'Precio', 'Tendencia/día', `Gana en ${m.days}d`, 'Disponible'],
-      m.econ.map((r) => [`${pos(r)}${esc(r.name)}`, origin(r), `${esc(M(r.price))}${r.bid ? `<div class="small">puja ~${esc(M(r.bid))}</div>` : ''}`, trendHtml(r.growthAvg3), `<span class="${signCls(r.gainNLaLiga)}">${esc(SM(r.gainNLaLiga))}</span>`, esc(r.available)]))
+    m.econ.length ? table(['Jugador', 'Origen', 'Precio', 'Puja máx. rentable', `Gana en ${m.days}d`, 'Rentab.', 'Tendencia', 'Disponible'],
+      m.econ.map((r) => [
+        `${pos(r)}${esc(r.name)}`, origin(r),
+        `${esc(M(r.price))}${r.bid ? `<div class="small">puja ~${esc(M(r.bid))}</div>` : ''}`,
+        `<b>${esc(M(r.maxBid))}</b>${r.bidTooHigh ? '<div class="small neg">la puja habitual la supera</div>' : ''}`,
+        `<span class="${signCls(r.gainNLaLiga)}">${esc(SM(r.gainNLaLiga))}</span>`,
+        `<span class="${signCls(r.roiN)}">${esc(PCT(r.roiN))}</span>`,
+        trendHtml(r.growthAvg3), esc(r.available),
+      ]))
       : '<p class="small">Hoy no hay ninguna con ganancia esperada.</p>',
-    m.econ.length ? 'En jugadores de mercado, la ganancia ya descuenta la sobrepuja típica de tu liga para ganar la puja.' : ''));
+    m.econ.length ? `<b>Puja máx. rentable</b>: lo máximo que puedes pagar sin perder dinero si lo vendes a LaLiga en ${m.days} días. En mercado, la ganancia ya descuenta la sobrepuja típica de tu liga.` : ''));
 
-  parts.push(section('⚽ Oportunidades deportivas · más puntos esperados',
-    m.sport.length ? table(['Jugador', 'Origen', 'Precio', 'xP', 'Juega', 'Próximo rival', 'Disponible'],
-      m.sport.map((r) => [`${pos(r)}${esc(r.name)}`, origin(r), esc(M(r.price)), `<b>${esc(N(r.xp))}</b>`, esc(`${Math.round((r.playProb ?? 0) * 100)} %`), r.nextRival ? `${venueIcon(r)} ${esc(r.nextRival)}` : '—', esc(r.available)]))
-      : '<p class="small">—</p>'));
+  parts.push(section(`⚽ Oportunidades deportivas · frente a tu alineación ${m.usingSaved ? 'actual' : 'recomendada'}`,
+    m.sport.length ? table(['Jugador', 'Origen', 'Precio', 'xP', 'Mejora a', 'Próximo (juega)', 'Puja máx. rentable', `Rentab. ${m.days}d`, 'Disponible'],
+      m.sport.map((r) => [
+        `${pos(r)}${esc(r.name)}`, origin(r), esc(M(r.price)), `<b>${esc(N(r.xp))}</b>`,
+        r.improves ? `${esc(r.improves.name)} <span class="pos">+${esc(N(r.improves.delta))}</span>` : '<span class="muted">no mejora</span>',
+        `${r.nextRival ? `${venueIcon(r)} ${esc(r.nextRival)} ` : ''}<span class="small">${esc(Math.round((r.playProb ?? 0) * 100))} %</span>`,
+        esc(M(r.maxBid)), `<span class="${signCls(r.roiN)}">${esc(PCT(r.roiN))}</span>`, esc(r.available),
+      ]), 'compact')
+      : '<p class="small">—</p>',
+    m.sport.length ? '"Mejora a" = el titular más flojo de esa posición en tu alineación y cuántos puntos por jornada ganarías.' : ''));
 
   if (m.clauseSoon.length) {
     parts.push(section('🔓 Cláusulas que se abren en 48 h', table(['Se abre', 'Jugador', 'Dueño', 'Cláusula', `Gana en ${m.days}d`, 'xP'],

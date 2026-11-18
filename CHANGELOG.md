@@ -16,6 +16,11 @@ a **LaLigaApp 3.5.7** de Externoak y cuándo. Para el historial del proyecto ori
 - Plantillas de incidencias y de pull request, `.editorconfig` y `.gitattributes`.
 - Integración continua (tests, lint y compilación) en GitHub Actions.
 - Scripts `npm run lint` y `npm run test:ci`; `scripts/register-task.ps1` para crear la tarea programada.
+- Informe: en las oportunidades, **puja máxima rentable** (lo máximo que se puede pagar sin perder
+  dinero vendiendo a LaLiga en N días), **rentabilidad %** sobre el coste y aviso si la puja habitual
+  de la liga la supera.
+- Informe: las oportunidades deportivas indican **a quién mejoran de la alineación guardada** y por
+  cuántos puntos, y se ordenan priorizando las que mejoran el once.
 
 ### Cambiado
 - El README original de LaLigaApp se conserva íntegro en `docs/upstream/`.
