@@ -24,5 +24,7 @@ test('aviso de cláusula', () => {
   expect(t).toContain('Aubameyang');
   expect(t).toContain('a&amp;b');
   expect(t).toContain('73,7 M');
+  expect(t).toContain('Cláusula abierta');
+  expect(buildTelegramClauseAlert({ name: 'X', owner: 'Y', clause: 1e6 }, 2)).toContain('Cláusula en 2 min');
   expect(tgEscape('<x>')).toBe('&lt;x&gt;');
 });

@@ -67,7 +67,7 @@ Cada informe llega como mensaje (cifras clave y *Qué hacer*) con el PDF adjunto
 
 ## Avisos de cláusulas
 
-Con la app abierta (aunque esté minimizada), se envía una notificación cuando se abre la
+Con la app abierta (aunque esté minimizada), se envía una notificación (y un Telegram) **2 minutos antes** de que se abra la
 cláusula de un jugador rival de la lista del último informe (próximas 48 h). Si el equipo estaba
 dormido, el aviso llega al volver, con un máximo de 12 horas de retraso.
 

@@ -29,11 +29,14 @@ export const buildTelegramSummary = (model) => {
   return lines.join('\n');
 };
 
-export const buildTelegramClauseAlert = (w) => {
+export const buildTelegramClauseAlert = (w, minutesLeft = 0) => {
   const parts = [`cláusula <b>${tgEscape(M(w.clause))}</b>`];
   if (isNum(w.xp)) parts.push(`xP ${tgEscape(w.xp.toFixed(1).replace('.', ','))}`);
   if (isNum(w.gainNLaLiga)) parts.push(`gana en 5d ${tgEscape(SM(w.gainNLaLiga))}`);
-  return `🔓 <b>Cláusula abierta: ${tgEscape(w.name)}</b>\nDe ${tgEscape(w.owner)} · ${parts.join(' · ')}`;
+  const head = minutesLeft > 0
+    ? `⏰ <b>Cláusula en ${minutesLeft} min: ${tgEscape(w.name)}</b>`
+    : `🔓 <b>Cláusula abierta: ${tgEscape(w.name)}</b>`;
+  return `${head}\nDe ${tgEscape(w.owner)} · ${parts.join(' · ')}`;
 };
 
 export const buildTelegramError = (message) => `⚠️ <b>Informe Fantasy: error</b>\n${tgEscape(message)}\nAbre la app en el PC para revisarlo.`;

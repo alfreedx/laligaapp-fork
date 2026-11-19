@@ -165,8 +165,8 @@ const AutomationSettings = () => {
         <Toggle
           checked={settings.clauseAlertsEnabled}
           onChange={(v) => update({ clauseAlertsEnabled: v })}
-          label="Avisarme cuando se abra la cláusula de un jugador rival"
-          hint="Notificación de Windows en el momento de la apertura, con precio y puntos esperados. Usa la lista del último informe (próximas 48 h). Solo funciona con la app abierta (puede estar minimizada)."
+          label="Avisarme 2 minutos antes de que se abra la cláusula de un jugador rival"
+          hint="Notificación de Windows (y Telegram si está activado) 2 min antes de la apertura, con precio y puntos esperados. Usa la lista del último informe (próximas 48 h). Solo funciona con la app abierta (puede estar minimizada)."
         />
         {state.clauseWatch?.length > 0 && (
           <div className="text-xs text-gray-600 dark:text-gray-300">

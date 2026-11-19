@@ -25,6 +25,7 @@ a **LaLigaApp 3.5.7** de Externoak y cuándo. Para el historial del proyecto ori
   *Mercado nuevo* (preparar el siguiente; el auto-mercado solo se ejecuta aquí). Horas configurables.
 - **Notificaciones al móvil por Telegram** (bot propio): resumen con *Qué hacer*, PDF adjunto,
   avisos de cláusulas y errores. Clave del bot cifrada con `safeStorage` en el proceso principal.
+- Los avisos de cláusulas llegan **2 minutos antes** de la apertura («Cláusula en 2 min»).
 
 ### Cambiado
 - El README original de LaLigaApp se conserva íntegro en `docs/upstream/`.
