@@ -106,7 +106,9 @@ const TelegramSettings = ({ settings, update }) => {
         <Toggle disabled={!ready || !settings.telegramEnabled} checked={settings.telegramSendPdf} onChange={(v) => update({ telegramSendPdf: v })}
           label="Adjuntar el PDF del informe" />
         <Toggle disabled={!ready || !settings.telegramEnabled} checked={settings.telegramClauseAlerts} onChange={(v) => update({ telegramClauseAlerts: v })}
-          label="Avisos de apertura de cláusulas" hint="Solo mientras la app esté abierta en el PC." />
+          label="Avisos de apertura de cláusulas" hint="2 min antes de que se abran. Solo mientras la app esté abierta en el PC." />
+        <Toggle disabled={!ready || !settings.telegramEnabled} checked={settings.matchdaySummaryEnabled !== false} onChange={(v) => update({ matchdaySummaryEnabled: v })}
+          label="Resumen al empezar la jornada" hint="1 h antes del primer partido: puntos previstos de tu alineación guardada, dudas y cambios sugeridos. La app lo programa sola (despierta el portátil)." />
       </div>
       <p className="text-xs text-gray-500">
         Los mensajes los envía tu PC: llegan si a esa hora está encendido o en suspensión (la tarea programada lo despierta). La clave del bot se guarda cifrada con tu usuario de Windows y no sale de este equipo salvo hacia api.telegram.org.

@@ -12,11 +12,13 @@ import {
 import { bestLineup } from '../analytics/forecast';
 import { buildBidStats, recentActivity, suggestedBid } from '../analytics/rivalIntel';
 import { buildProtectionPlan } from '../analytics/protection';
+import { applyClauseLock, clauseLockWindow, isClauseLocked } from '../analytics/matchday';
+import { classifyOffers, GOOD_OFFER_PREMIUM } from '../analytics/offers';
 import { VARIANTS, bestVariant } from '../analytics/backtest';
 import { renderReportHtml } from './reportHtml';
 import { EDITIONS } from './schedule';
 import {
-  isNum, M, SM, K, N, PCT, dt, STATUS_ICON, LINE_LABEL, trendArrow, venueIcon as venue,
+  isNum, M, SM, K, N, PCT, PCT2, dt, STATUS_ICON, LINE_LABEL, trendArrow, venueIcon as venue,
 } from './reportFormat';
 
 const H48 = 48 * 3600 * 1000;
@@ -27,10 +29,15 @@ export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leag
   const now = new Date();
   const common = { ledger: data.ledger, resolveTrend: data.resolveTrend, rateMode: 'avg3' };
 
-  const squad = buildSquadRows({ ...common, team: data.myTeam });
+  // Inicio de la jornada (primer partido) y bloqueo de cláusulas de las 24 h previas
+  const kickoff = data.matchday?.kickoff || null;
+  const lockWin = clauseLockWindow(kickoff);
+  const clausesLocked = isClauseLocked(kickoff, now);
+  const lock = (r) => applyClauseLock(r, kickoff, now);
+  const squad = buildSquadRows({ ...common, team: data.myTeam }).map(lock);
   const market = buildMarketRows({ ...common, market: data.market, ownerByPlayer: data.ownerByPlayer })
     .filter((r) => r.sellerId !== data.myTeam?.managerId);
-  const rivals = buildRivalRows({ ...common, teams: data.teams, myTeamId: data.myTeamId });
+  const rivals = buildRivalRows({ ...common, teams: data.teams, myTeamId: data.myTeamId }).map(lock);
   const money = buildMoneyRows({ teams: data.teams, ledger: data.ledger, myTeam: data.myTeam, myMoney: data.myMoney, initialMoney: settings.initialMoney, clauseSpend });
   const bidStats = buildBidStats({ ledger: data.ledger, trendById: data.trendById || (() => null), now });
   const recent = recentActivity(data.ledger, { days: 7, now });
@@ -42,14 +49,13 @@ export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leag
   const closest = myRank === 1 ? ranking[1] : ranking[0];
   const gap = closest ? myPts - (closest.teamPoints || 0) : null;
 
-  // Ofertas recibidas: mejor oferta por jugador y ganancia si se acepta
+  // Ofertas recibidas: mejor oferta por jugador (se clasifican cuando se conoce el once)
   const offerFrom = (o) => o?.buyerTeam?.manager?.managerName || o?.buyer?.managerName || o?.team?.manager?.managerName || 'LaLiga';
   const offers = squad.map((r) => {
     const best = [...(data.myOffers?.get(r.id) || [])].filter((o) => isNum(o.money)).sort((a, b) => b.money - a.money)[0];
     if (!best) return null;
     return { r, money: best.money, from: offerFrom(best), expires: best.expirationDate, gain: isNum(r.buyPrice) ? best.money - r.buyPrice : null };
-  }).filter(Boolean).sort((a, b) => (b.gain ?? -Infinity) - (a.gain ?? -Infinity));
-  const goodOffers = offers.filter((o) => isNum(o.gain) && o.gain > 0);
+  }).filter(Boolean);
 
   // Oportunidades: mercado de LaLiga + cláusulas de rivales abiertas o en ≤ 48 h
   const candidates = [
@@ -94,6 +100,12 @@ export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leag
   const lineup = bestLineup(squad);
   const benchByLine = [1, 2, 3, 4].map((pos) => lineup.bench.find((p) => p.positionId === pos)).filter(Boolean);
   const doubtful = lineup.starters.filter((p) => p.playProb < 0.6);
+  // Oferta buena = ≥ 5 % sobre el valor. Fuerte si además hay motivo deportivo para vender.
+  const classified = classifyOffers(offers, { starterIds: new Set(lineup.starters.map((p) => String(p.id))), coachId: lineup.coach?.id ?? null })
+    .sort((a, b) => (b.premium ?? -Infinity) - (a.premium ?? -Infinity));
+  const goodOffers = classified.filter((o) => o.good);
+  const strongSells = goodOffers.filter((o) => o.level === 'fuerte');
+  const offerOpportunities = goodOffers.filter((o) => o.level === 'oportunidad');
   // Referencia para "a quién mejora": tu alineación GUARDADA (si se pudo leer); si no, la recomendada
   const savedStarters = squad.filter((r) => data.currentLineupIds?.has(r.id) && r.positionId !== 5);
   const usingSaved = savedStarters.length >= 10;
@@ -139,15 +151,22 @@ export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leag
 
   // ---- 🎯 Qué hacer hoy (priorizado) ----
   const actions = [];
-  const start = data.weekInfo?.openingWeekDate;
+  const start = kickoff || data.weekInfo?.openingWeekDate;
   if (isNum(data.myMoney) && data.myMoney < 0) {
     actions.push({ kind: 'risk', icon: '💸', text: `**Saldo negativo (${M(data.myMoney)})**: vende antes de ${dt(start)} o puntuarás 0.` });
   }
-  goodOffers.slice(0, 3).forEach((o) => actions.push({
-    kind: 'money', icon: '💰', text: `Acepta la oferta de ${o.from} por **${o.r.name}**: ${M(o.money)} (**${SM(o.gain)}** sobre lo que pagaste) · caduca ${dt(o.expires)}`,
+  strongSells.slice(0, 3).forEach((o) => actions.push({
+    kind: 'money', icon: '🔴', text: `Vende a **${o.r.name}**: oferta de ${o.from} ${M(o.money)} (**${PCT(o.premium * 100)}** sobre su valor${isNum(o.gain) ? `; ${SM(o.gain)} sobre lo que pagaste` : ''}) · ${o.reasons.join(', ')} · caduca ${dt(o.expires)}`,
   }));
+  if (clausesLocked && lockWin) {
+    actions.push({
+      kind: 'risk', icon: '🔒', text: `**Cláusulas bloqueadas hasta ${dt(lockWin.end)}** (primer partido): nadie puede clausular, así que no hace falta blindar todavía.`,
+    });
+  }
   mustProtect.filter((p) => p.action === 'Proteger').slice(0, 2).forEach((p) => actions.push({
-    kind: 'risk', icon: '🛡️', text: `Protege a **${p.name}**: cláusula ${p.clauseIsOpen ? 'abierta' : `se abre ${dt(p.clauseOpenAt)}`} (${M(p.clause)}) y ${p.canPay.length} rival(es) pueden pagarla → ${p.rivalsExcluded === p.canPay.length && p.targetClause ? `sube la cláusula a ${M(p.targetClause)}` : 'blíndalo'}.`,
+    kind: 'risk', icon: '🛡️', text: p.clauseLockedUntil
+      ? `Protege a **${p.name}** justo antes de ${dt(p.clauseLockedUntil)}: al empezar la jornada se podrá clausular (${M(p.clause)}) y ${p.canPay.length} rival(es) pueden pagarla → ${p.rivalsExcluded === p.canPay.length && p.targetClause ? `sube la cláusula a ${M(p.targetClause)}` : 'blíndalo'}.`
+      : `Protege a **${p.name}**: cláusula ${p.clauseIsOpen ? 'abierta' : `se abre ${dt(p.clauseOpenAt)}`} (${M(p.clause)}) y ${p.canPay.length} rival(es) pueden pagarla → ${p.rivalsExcluded === p.canPay.length && p.targetClause ? `sube la cláusula a ${M(p.targetClause)}` : 'blíndalo'}.`,
   }));
   squad.filter((r) => r.status === 'injured' || r.status === 'suspended').slice(0, 2).forEach((r) => actions.push({
     kind: 'risk', icon: STATUS_ICON[r.status], text: `**${r.name}** ${r.status === 'injured' ? 'lesionado' : 'sancionado'}: no lo alinees${isNum(r.latentGainLaLiga) && r.latentGainLaLiga > 0 ? ' y valora venderlo' : ''}.`,
@@ -164,7 +183,8 @@ export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leag
 
   return {
     now, days, leagueName, settings, autoMarketLog, edition,
-    week: data.week, weekStart: start, trendsOk: data.trendsOk,
+    week: data.matchday?.week ?? data.week, weekStart: start, trendsOk: data.trendsOk,
+    clauseLock: lockWin ? { ...lockWin, active: clausesLocked } : null,
     kpis: {
       rank: myRank, points: myPts, gap, closest: closest?.managerName,
       money: data.myMoney, teamValue: sum(squad, 'value'),
@@ -172,7 +192,7 @@ export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leag
     },
     actions: actions.slice(0, 7),
     lineup, benchByLine, doubtful, usingSaved,
-    offers, goodOffers,
+    offers: classified, goodOffers, strongSells, offerOpportunities, goodOfferPremium: GOOD_OFFER_PREMIUM,
     mustProtect, acceptable,
     econ, sport, clauseSoon, upgrades,
     squad: [...squad].sort((a, b) => (a.positionId - b.positionId) || (b.value - a.value)),
@@ -194,7 +214,7 @@ export const renderMarkdown = (m) => {
   const md = [];
   const k = m.kpis;
   md.push(`# ${EDITIONS[m.edition]?.icon || ''} Informe Fantasy (${EDITIONS[m.edition]?.label || ''})${m.leagueName ? ` — ${m.leagueName}` : ''} · ${m.now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}`);
-  md.push(`Jornada ${m.week ?? '?'}${m.weekStart ? ` · empieza ${dt(m.weekStart)}` : ''} · generado ${m.now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`);
+  md.push(`Jornada ${m.week ?? '?'}${m.weekStart ? ` · primer partido ${dt(m.weekStart)}` : ''}${m.clauseLock ? ` · cláusulas bloqueadas ${m.clauseLock.active ? `hasta ${dt(m.clauseLock.end)}` : `desde ${dt(m.clauseLock.start)}`}` : ''} · generado ${m.now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`);
   md.push('');
   md.push(`**${k.rank || '?'}º · ${k.points} pts**${isNum(k.gap) ? ` (${k.gap >= 0 ? '+' : ''}${k.gap} vs ${k.closest})` : ''} · Saldo **${M(k.money)}** · Equipo **${M(k.teamValue)}** · Si vendes a LaLiga hoy: **${SM(k.gainLaLiga)}**${isNum(k.gainLaLigaN) ? ` (en ${m.days}d: ${SM(k.gainLaLigaN)})` : ''}`);
   md.push(m.edition === 'cierre'
@@ -216,12 +236,22 @@ export const renderMarkdown = (m) => {
   md.push(`- **Entrenador**: ${L.coach?.name || '—'} · **Banquillo**: ${m.benchByLine.map((p) => p.name).join(', ') || '—'}`);
   md.push('');
 
-  if (m.goodOffers.length) {
-    md.push('## 📩 Ofertas que te dan ganancia');
-    md.push(table(['Jugador', 'Oferta', 'Ganancia', 'De', 'Caduca'],
-      m.goodOffers.map((o) => [o.r.name, M(o.money), SM(o.gain), o.from, dt(o.expires)])));
+  if (m.offers.length) {
+    const minPct = Math.round(m.goodOfferPremium * 100);
+    md.push(`## 📩 Ofertas recibidas (buena = al menos +${minPct} % sobre el valor)`);
+    const offerRow = (o) => [o.r.name, M(o.money), PCT(o.premium * 100), SM(o.gain), N(o.r.xp), o.from, dt(o.expires)];
+    const heads = ['Jugador', 'Oferta', 'Sobre valor', 'Sobre lo pagado', 'xP', 'De', 'Caduca'];
+    if (m.strongSells.length) {
+      md.push('### 🔴 Venta fuerte (buena oferta y motivo deportivo)');
+      md.push(table([...heads, 'Motivo'], m.strongSells.map((o) => [...offerRow(o), o.reasons.join(', ')])));
+    }
+    if (m.offerOpportunities.length) {
+      md.push('### 🟡 Oportunidad (buena oferta, pero el jugador rinde: solo si te hace falta dinero)');
+      md.push(table(heads, m.offerOpportunities.map(offerRow)));
+    }
     const rest = m.offers.length - m.goodOffers.length;
-    if (rest > 0) md.push(`\n${rest} oferta(s) más con pérdida (no compensa aceptarlas).`);
+    if (!m.goodOffers.length) md.push(`Ninguna llega al +${minPct} % sobre el valor: no compensa vender.`);
+    else if (rest > 0) md.push(`\n${rest} oferta(s) más por debajo del +${minPct} % (no compensa aceptarlas).`);
     md.push('');
   }
 
@@ -229,7 +259,7 @@ export const renderMarkdown = (m) => {
     md.push('## 🛡️ Protección frente a cláusulas');
     if (m.mustProtect.length) {
       md.push(table(['Jugador', 'Cláusula', 'Estado', 'Rivales que pueden', 'Qué hacer'],
-        m.mustProtect.map((p) => [p.name, M(p.clause), p.clauseIsOpen ? 'abierta' : `se abre ${dt(p.clauseOpenAt)}`, p.canPay.length, p.reason.replace(/\*\*/g, '')])));
+        m.mustProtect.map((p) => [p.name, M(p.clause), p.clauseIsOpen ? 'abierta' : p.clauseLockedUntil ? `bloqueada hasta ${dt(p.clauseLockedUntil)}` : `se abre ${dt(p.clauseOpenAt)}`, p.canPay.length, p.reason.replace(/\*\*/g, '')])));
     }
     if (m.acceptable.length) md.push(`\nExpuestos pero asumibles (suplentes, no pierdes dinero): ${m.acceptable.map((p) => p.name).join(', ')}.`);
     md.push('');
@@ -238,7 +268,7 @@ export const renderMarkdown = (m) => {
   md.push(`## 💰 Oportunidades económicas (vender a LaLiga en ${m.days} días)`);
   md.push('_En mercado, la ganancia ya descuenta la sobrepuja típica de la liga._');
   md.push(m.econ.length ? table(['Jugador', 'Origen', 'Precio', 'Puja máx. rentable', `Gana en ${m.days}d`, 'Rentab.', 'Tendencia/día', 'Disponible'],
-    m.econ.map((r) => [`${r.name} (${r.position})`, r.origin === 'Mercado' ? 'Mercado' : `Cláusula ${r.from}`, `${M(r.price)}${r.bid ? ` · puja ~${M(r.bid)}` : ''}`, `${M(r.maxBid)}${r.bidTooHigh ? ' ⚠️' : ''}`, SM(r.gainNLaLiga), PCT(r.roiN), `${trendArrow(r.growthAvg3)} ${K(r.growthAvg3)}`, r.available]))
+    m.econ.map((r) => [`${r.name} (${r.position})`, r.origin === 'Mercado' ? 'Mercado' : `Cláusula ${r.from}`, `${M(r.price)}${r.bid ? ` · puja ~${M(r.bid)}` : ''}`, `${M(r.maxBid)}${r.bidTooHigh ? ' ⚠️' : ''}`, SM(r.gainNLaLiga), PCT(r.roiN), `${trendArrow(r.growthAvg3)} ${K(r.growthAvg3)}${isNum(r.growthAvg3Pct) ? ` (${PCT2(r.growthAvg3Pct)})` : ''}`, r.available]))
     : 'Ninguna con ganancia esperada.');
   md.push(`_Puja máx. rentable = lo máximo que puedes pagar sin perder dinero vendiéndolo a LaLiga en ${m.days} días. ⚠️ = la puja habitual de tu liga ya la supera._`);
   md.push('');
@@ -264,7 +294,7 @@ export const renderMarkdown = (m) => {
   md.push('## 📋 Tu plantilla');
   md.push(table(['Jugador', 'Valor', 'Tendencia/día', 'Ganancia LaLiga hoy', `en ${m.days}d`, 'xP', 'Notas'],
     m.squad.map((r) => [
-      `${r.name} (${r.position})`, M(r.value), `${trendArrow(r.growthAvg3)} ${K(r.growthAvg3)}`, SM(r.latentGainLaLiga), SM(r.gainNLaLiga), N(r.xp),
+      `${r.name} (${r.position})`, M(r.value), `${trendArrow(r.growthAvg3)} ${K(r.growthAvg3)}${isNum(r.growthAvg3Pct) ? ` (${PCT2(r.growthAvg3Pct)})` : ''}`, SM(r.latentGainLaLiga), SM(r.gainNLaLiga), N(r.xp),
       [STATUS_ICON[r.status], r.inMarket ? '🏷️' : '', r.isShielded ? '🛡️' : r.clauseIsOpen ? '🔓' : ''].filter(Boolean).join(' '),
     ])));
   md.push('');
@@ -298,7 +328,7 @@ const buildJson = (m) => {
     id: r.id, nombre: r.name, posicion: r.position, equipo: r.team, estado: r.status,
     precioCompra: r.buyPrice, valor: r.value, ofertaLaLigaMax: r.laLigaMax,
     gananciaLatente: r.latentGain, gananciaLatenteLaLiga: r.latentGainLaLiga,
-    crecimientoDiario: r.dailyGrowth, crecimientoMedio3d: r.growthAvg3,
+    crecimientoDiario: r.dailyGrowth, crecimientoDiarioPct: r.dailyGrowthPct, crecimientoMedio3d: r.growthAvg3, crecimientoMedio3dPct: r.growthAvg3Pct,
     [`valorEn${m.days}d`]: r.valueN, [`ganancia${m.days}dLaLiga`]: r.gainNLaLiga,
     puntos: r.points, media: r.averagePoints, xP: r.xp, probJugar: r.playProb, rival: r.nextRival,
     clausula: r.clause, clausulaAbierta: r.clauseIsOpen, clausulaSeAbre: r.clauseOpenAt, blindado: r.isShielded,
@@ -310,7 +340,8 @@ const buildJson = (m) => {
     edicion: m.edition, // 'cierre' (antes del reseteo de las 19:00) o 'apertura' (mercado nuevo)
     liga: m.leagueName || null,
     jornada: m.week,
-    inicioJornada: m.weekStart || null,
+    inicioJornada: m.weekStart || null, // primer partido de la jornada
+    clausulasBloqueadas: m.clauseLock ? { desde: m.clauseLock.start, hasta: m.clauseLock.end, ahora: m.clauseLock.active } : null,
     posicion: m.kpis.rank || null,
     puntos: m.kpis.points,
     saldo: m.kpis.money,
@@ -323,11 +354,11 @@ const buildJson = (m) => {
       banquillo: m.benchByLine.map((p) => ({ nombre: p.name, posicion: p.position, xP: p.xp })),
     },
     fichajesQueMejoranElOnce: m.upgrades.map(({ r, replaces, delta }) => ({ jugador: r.name, posicion: r.position, origen: r.origin, de: r.from, xP: r.xp, sustituyeA: replaces.name, mejora: delta, precio: r.price, disponible: r.available })),
-    ofertasRecibidas: m.offers.map((o) => ({ jugador: o.r.name, precioCompra: o.r.buyPrice, valor: o.r.value, oferta: o.money, de: o.from, gananciaSiAceptas: o.gain, expira: o.expires })),
+    ofertasRecibidas: m.offers.map((o) => ({ jugador: o.r.name, precioCompra: o.r.buyPrice, valor: o.r.value, oferta: o.money, sobreValorPct: isNum(o.premium) ? o.premium * 100 : null, recomendacion: o.level, motivos: o.reasons, de: o.from, gananciaSiAceptas: o.gain, expira: o.expires })),
     oportunidadesEconomicas: m.econ.map((r) => ({ ...pick(r), origen: r.origin, de: r.from, precio: r.price, costeEsperado: r.cost, pujaSugerida: r.bid || null, pujaMaxRentable: r.maxBid, rentabilidadPct: r.roiN, disponible: r.available })),
     oportunidadesDeportivas: m.sport.map((r) => ({ ...pick(r), origen: r.origin, de: r.from, precio: r.price, mejoraA: r.improves?.name || null, mejoraPts: r.improves?.delta ?? null, pujaMaxRentable: r.maxBid, rentabilidadPct: r.roiN, disponible: r.available })),
     clausulasProximas48h: m.clauseSoon.map((r) => ({ ...pick(r), dueño: r.owner, seAbre: r.clauseOpenAt, precio: r.clause })),
-    proteccion: m._raw.protection.map((p) => ({ jugador: p.name, titular: p.isStarter, xP: p.xp, clausula: p.clause, abierta: p.clauseIsOpen, seAbre: p.clauseOpenAt, puedenPagarla: p.canPay, recomendacion: p.action, motivo: p.reason, subirA: p.targetClause, costeEstimado: p.raiseCost })),
+    proteccion: m._raw.protection.map((p) => ({ jugador: p.name, titular: p.isStarter, xP: p.xp, clausula: p.clause, abierta: p.clauseIsOpen, seAbre: p.clauseOpenAt, bloqueadaHasta: p.clauseLockedUntil || null, puedenPagarla: p.canPay, recomendacion: p.action, motivo: p.reason, subirA: p.targetClause, costeEstimado: p.raiseCost })),
     rivales: m.rivalsTable.map((r) => ({ manager: r.name, yo: r.isMe, puesto: r.position, puntos: r.points, dineroEstimado: r.calibrated, valorEquipo: r.teamValue, sobrepujaMedianaPct: r.overbid, compras7d: r.buys7, ventas7d: r.sells7 })),
     sobrepujaLiga: { muestras: m.bidOverall?.n, medianaPct: m.bidOverall?.median, p75Pct: m.bidOverall?.p75 },
     autoMercado: m.autoMarketLog,

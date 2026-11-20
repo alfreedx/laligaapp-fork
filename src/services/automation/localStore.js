@@ -56,6 +56,7 @@ export const DEFAULT_SETTINGS = {
   telegramEnabled: false,      // se activa al configurar el bot en Ajustes
   telegramSendPdf: true,       // adjuntar el PDF del informe
   telegramClauseAlerts: true,  // avisos de apertura de cláusulas también por Telegram
+  matchdaySummaryEnabled: true, // resumen 1 h antes del primer partido de la jornada
   clauseAlertsEnabled: true,  // notificar cuando se abre la cláusula de un rival (app abierta)
   autoMarketEnabled: false,   // desactivado hasta que el usuario lo active
   autoMarketDryRun: true,     // simulación: registra lo que haría sin hacerlo

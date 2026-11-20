@@ -15,6 +15,7 @@ import { clauseRaisesBetween } from '../analytics/rivalIntel';
 import { buildPredictionRecord, actualPointsForWeek, evaluateWeek } from '../analytics/backtest';
 import { currentEdition, EDITIONS } from './schedule';
 import { buildTelegramSummary, buildTelegramError } from './telegramMessage';
+import { matchdaySummaryTime } from './matchdayJob';
 
 export { isRunDue } from './schedule';
 
@@ -118,10 +119,19 @@ export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual
         }
       }
 
+      // Resumen de inicio de jornada: tarea de Windows de un solo uso 1 h antes del primer partido
+      let matchdayTaskError = null;
+      const summaryAt = settings.matchdaySummaryEnabled !== false ? matchdaySummaryTime(data.matchday?.kickoff) : null;
+      if (summaryAt && ea?.scheduleMatchdaySummary && state.matchdayTaskAt !== summaryAt) {
+        const r = await ea.scheduleMatchdaySummary(summaryAt).catch((e) => ({ success: false, error: e.message }));
+        if (!r?.success) matchdayTaskError = r?.error || 'error desconocido';
+      }
+
       const listed = autoMarketLog.filter((l) => l.status === 'listed').length;
       const warnings = [
         pdfError && `el PDF falló: ${pdfError}`,
         telegramError && `Telegram falló: ${telegramError}`,
+        matchdayTaskError && `no se pudo programar el resumen de jornada: ${matchdayTaskError}`,
       ].filter(Boolean);
       const newState = {
         ...state,
@@ -137,6 +147,8 @@ export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual
         predictions: keepLast(predictions, 8),
         backtests: keepLast(backtests, 20),
         clauseWatch: report.clauseWatch,
+        nextKickoff: data.matchday?.kickoff || null,
+        matchdayTaskAt: matchdayTaskError ? state.matchdayTaskAt || null : summaryAt || state.matchdayTaskAt || null,
       };
       await saveState(newState);
 

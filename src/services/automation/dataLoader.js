@@ -9,6 +9,7 @@ import { extractArray, readTeamMoney } from '../../utils/helpers';
 import { extractTeamPlayers } from '../../utils/fetchAllTeamsData';
 import { fetchAllActivity } from '../../hooks/useLeagueAnalytics';
 import { buildLedger } from '../analytics/ledger';
+import { firstKickoff, resolveMatchday } from '../analytics/matchday';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -59,6 +60,23 @@ export const loadLeagueData = async ({ leagueId, user }) => {
       .map((p) => String(p?.playerMaster?.id ?? ''))
       .filter(Boolean)
   );
+  // Detalle de la alineación guardada (para el resumen de inicio de jornada)
+  const lineupEntries = ['goalkeeper', 'defender', 'midfield', 'striker']
+    .flatMap((k) => (Array.isArray(lineupFormation[k]) ? lineupFormation[k] : lineupFormation[k] ? [lineupFormation[k]] : []))
+    .filter(Boolean);
+  const captainEntry = lineupFormation.captain
+    ? lineupEntries.find((p) => String(p?.playerTeamId ?? '') === String(lineupFormation.captain)
+      || String(p?.playerMaster?.id ?? '') === String(lineupFormation.captain))
+    : null;
+  const coachEntry = Array.isArray(lineupFormation.coach) ? lineupFormation.coach[0] : lineupFormation.coach;
+  const savedLineup = {
+    formation: Array.isArray(lineupFormation.tacticalFormation) ? lineupFormation.tacticalFormation.join('-') : null,
+    captainId: captainEntry?.playerMaster?.id != null ? String(captainEntry.playerMaster.id) : null,
+    coachId: coachEntry?.playerMaster?.id != null ? String(coachEntry.playerMaster.id) : null,
+    benchIds: Object.values(lineupFormation.bench || {})
+      .map((p) => (Array.isArray(p) ? p[0] : p)?.playerMaster?.id)
+      .filter((id) => id != null).map(String),
+  };
 
   // Todos los jugadores de LaLiga por id (nombres de vendidos, tendencias por id)
   const allPlayersById = new Map();
@@ -94,6 +112,21 @@ export const loadLeagueData = async ({ leagueId, user }) => {
 
   const weekInfo = weekRes?.data || null; // { weekNumber, openingWeekDate, closingWeekDate, isLive }
   const week = weekInfo?.weekNumber ?? null;
+
+  // Inicio real de la jornada = primer partido del calendario (respaldo: openingWeekDate)
+  const kickoffOf = async (w) => {
+    if (!w) return null;
+    try {
+      const res = await fantasyAPI.getMatchday(w);
+      return firstKickoff(extractArray(res?.data ?? res));
+    } catch {
+      return null;
+    }
+  };
+  const weekKickoff = await kickoffOf(week);
+  const nowLoad = new Date();
+  const nextKickoff = weekKickoff && new Date(weekKickoff) > nowLoad ? null : await kickoffOf(week ? week + 1 : null);
+  const matchday = resolveMatchday({ week, weekKickoff, nextKickoff, openingWeekDate: weekInfo?.openingWeekDate, now: nowLoad });
   const ownerByPlayer = new Map();
   teams.forEach((t) => t.players.forEach((p) => ownerByPlayer.set(String(p.playerMaster?.id), t)));
 
@@ -110,6 +143,7 @@ export const loadLeagueData = async ({ leagueId, user }) => {
     ownerByPlayer,
     myOffers,
     currentLineupIds,
+    savedLineup,
     resolveTrend,
     trendById,
     allPlayersById,
@@ -117,6 +151,7 @@ export const loadLeagueData = async ({ leagueId, user }) => {
     trendsOk,
     week,
     weekInfo,
+    matchday, // { week, kickoff, started } → próximo primer partido
     loadedAt: new Date().toISOString(),
   };
 };

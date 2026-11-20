@@ -4,16 +4,49 @@
  * el Programador de tareas de Windows a las 19:05).
  */
 const { app, ipcMain, dialog, shell, Notification, powerSaveBlocker, BrowserWindow, session } = require('electron');
+const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
 const CONFIG_FILE = () => path.join(app.getPath('userData'), 'fantasy-automation.json');
 const SAFE_NAME = /^[A-Za-z0-9._-]{1,80}$/;
 const DAILY_RUN_FLAG = '--daily-run';
+const MATCHDAY_FLAG = '--matchday'; // con --daily-run: solo el resumen de inicio de jornada
+const MATCHDAY_TASK = 'LaLigaFantasy - Inicio de jornada';
 const DAILY_RUN_TIMEOUT_MS = 10 * 60 * 1000;
 const PDF_PARTITION = 'pdf-render'; // sin "persist:" → sesión en memoria, aislada
 
 const isDailyRun = (argv = process.argv) => argv.includes(DAILY_RUN_FLAG);
+const runMode = (argv = process.argv) => (argv.includes(MATCHDAY_FLAG) ? 'matchday' : 'report');
+
+/**
+ * Crea (o sustituye) una tarea de Windows de un solo uso que abre la app con
+ * `--daily-run --matchday` a la hora indicada y despierta el equipo.
+ * Los valores van por variables de entorno: nunca se interpolan en el script.
+ */
+const scheduleMatchdayTask = (when) => new Promise((resolve) => {
+    if (process.platform !== 'win32') return resolve({ success: false, error: 'Solo disponible en Windows' });
+    if (!app.isPackaged) return resolve({ success: false, error: 'Solo en la app instalada (no en modo desarrollo)' });
+    const p = (n) => String(n).padStart(2, '0');
+    const local = `${when.getFullYear()}-${p(when.getMonth() + 1)}-${p(when.getDate())}T${p(when.getHours())}:${p(when.getMinutes())}:00`;
+    const script = [
+        "$ErrorActionPreference = 'Stop'",
+        "$at = [datetime]::ParseExact($env:LLF_AT, 'yyyy-MM-ddTHH:mm:ss', [Globalization.CultureInfo]::InvariantCulture)",
+        "$a = New-ScheduledTaskAction -Execute $env:LLF_EXE -Argument '--daily-run --matchday' -WorkingDirectory (Split-Path $env:LLF_EXE)",
+        '$t = New-ScheduledTaskTrigger -Once -At $at',
+        '$s = New-ScheduledTaskSettingsSet -WakeToRun -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 15) -MultipleInstances IgnoreNew',
+        '$p = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\\$env:USERNAME" -LogonType Interactive -RunLevel Limited',
+        "Register-ScheduledTask -TaskName $env:LLF_TASK -Action $a -Trigger $t -Settings $s -Principal $p -Force -Description 'Resumen de LaLiga Fantasy (fork) 1 h antes del primer partido de la jornada.' | Out-Null",
+    ].join('; ');
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], {
+        env: { ...process.env, LLF_EXE: process.execPath, LLF_AT: local, LLF_TASK: MATCHDAY_TASK },
+        windowsHide: true,
+        timeout: 30000,
+    }, (error, _stdout, stderr) => {
+        if (error) resolve({ success: false, error: String(stderr || error.message).trim().slice(0, 300) });
+        else resolve({ success: true, at: local });
+    });
+});
 
 const readConfig = () => {
     try {
@@ -78,7 +111,7 @@ function registerAutomation({ getMainWindow }) {
     app.on('second-instance', (_event, argv) => {
         const win = getMainWindow();
         if (isDailyRun(argv)) {
-            win?.webContents.send('automation:run-now', { source: 'scheduler' });
+            win?.webContents.send('automation:run-now', { source: 'scheduler', mode: runMode(argv) });
             return;
         }
         if (win) {
@@ -91,7 +124,17 @@ function registerAutomation({ getMainWindow }) {
         exportDir: getExportDir(),
         defaultExportDir: defaultExportDir(),
         isDailyRun: dailyRunActive,
+        dailyRunMode: runMode(),
     }));
+
+    ipcMain.handle('automation:schedule-matchday-summary', async (_event, at) => {
+        const when = new Date(String(at || ''));
+        const t = when.getTime();
+        if (!Number.isFinite(t) || t <= Date.now() || t - Date.now() > 14 * 24 * 3600 * 1000) {
+            return { success: false, error: 'Fecha no válida' };
+        }
+        return scheduleMatchdayTask(when);
+    });
 
     ipcMain.handle('automation:choose-export-dir', async () => {
         const result = await dialog.showOpenDialog(getMainWindow(), {

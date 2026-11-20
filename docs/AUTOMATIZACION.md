@@ -23,6 +23,22 @@ En cada una:
 
 Si la app no estaba abierta a la hora programada, el trabajo se ejecuta en cuanto se abre.
 
+## Inicio de jornada y bloqueo de cláusulas
+
+El informe lee el calendario y toma la hora del **primer partido** de la jornada (si ya pasó, la
+de la siguiente). Desde **24 h antes** hasta ese partido nadie puede pagar cláusulas, así que:
+
+- una cláusula abierta o que se abre en esa ventana se trata como disponible **al empezar el partido**;
+- el informe no pide blindar durante el bloqueo: indica protegerlo justo antes del primer partido;
+- los avisos de cláusula se mueven a 2 min antes del primer partido.
+
+**Resumen de inicio de jornada**: 1 h antes del primer partido llega a Telegram (y como notificación
+de Windows) el resumen de tu alineación guardada: puntos previstos, capitán, lesionados o dudas
+alineados y los cambios que propone la alineación recomendada. Cada informe diario programa una
+tarea de Windows de un solo uso, **"LaLigaFantasy - Inicio de jornada"**, que despierta el equipo
+y abre la app con `--daily-run --matchday`. Con la app abierta, se envía igualmente a su hora.
+Nunca se envía dos veces para el mismo partido. Se desactiva en *Ajustes → Telegram*.
+
 ## Tarea programada (portátil en suspensión)
 
 `scripts/register-task.ps1` crea la tarea **"LaLigaFantasy - Informe diario"**, que:

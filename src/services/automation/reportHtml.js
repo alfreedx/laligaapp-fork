@@ -3,7 +3,7 @@
  * Todo el texto procedente de la API se escapa: nunca se interpreta como HTML.
  */
 import {
-  isNum, M, SM, K, N, PCT, dt, STATUS_ICON, LINE_LABEL, trendArrow, venueIcon,
+  isNum, M, SM, K, N, PCT, PCT2, dt, STATUS_ICON, LINE_LABEL, trendArrow, venueIcon,
 } from './reportFormat';
 import { EDITIONS } from './schedule';
 
@@ -12,7 +12,7 @@ const esc = (s) => String(s ?? '')
 // **negrita** dentro de textos ya escapados
 const rich = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
 const signCls = (v) => (!isNum(v) ? 'muted' : v > 0 ? 'pos' : v < 0 ? 'neg' : '');
-const trendHtml = (v) => (isNum(v) ? `<span class="${v > 20_000 ? 'pos' : v < -20_000 ? 'neg' : 'muted'}">${trendArrow(v)} ${K(v)}</span>` : '<span class="muted">—</span>');
+const trendHtml = (v, pct = null) => (isNum(v) ? `<span class="${v > 20_000 ? 'pos' : v < -20_000 ? 'neg' : 'muted'}">${trendArrow(v)} ${K(v)}${isNum(pct) ? `<br><span class="small">${PCT2(pct)}</span>` : ''}</span>` : '<span class="muted">—</span>');
 const origin = (r) => (r.origin === 'Mercado'
   ? '<span class="pill pill-m">Mercado</span>'
   : `<span class="pill pill-c">Cláusula</span> <span class="small">${esc(r.from)}</span>`);
@@ -85,7 +85,7 @@ export const renderReportHtml = (m) => {
   // Cabecera + cifras clave
   parts.push(`<div class="hero">
     <h1>Informe Fantasy${m.leagueName ? ` · ${esc(m.leagueName)}` : ''}</h1>
-    <div class="sub">${esc(EDITIONS[m.edition]?.icon || "")} <b>${esc(EDITIONS[m.edition]?.label || "")}</b> · ${esc(m.now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))} · Jornada ${esc(m.week ?? '?')}${m.weekStart ? ` empieza ${esc(dt(m.weekStart))}` : ''}</div>
+    <div class="sub">${esc(EDITIONS[m.edition]?.icon || "")} <b>${esc(EDITIONS[m.edition]?.label || "")}</b> · ${esc(m.now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))} · Jornada ${esc(m.week ?? '?')}${m.weekStart ? ` · 1.er partido ${esc(dt(m.weekStart))}` : ''}</div>
     <div class="kpis">
       <div class="kpi"><div class="l">Clasificación</div><div class="v">${esc(k.rank || '?')}º · ${esc(k.points)}</div><div class="s">${isNum(k.gap) ? `${k.gap >= 0 ? '+' : ''}${esc(k.gap)} pts vs ${esc(k.closest)}` : ''}</div></div>
       <div class="kpi"><div class="l">Saldo</div><div class="v">${esc(M(k.money))}</div><div class="s">${isNum(k.money) && k.money < 0 ? '⚠️ negativo' : 'disponible'}</div></div>
@@ -96,6 +96,8 @@ export const renderReportHtml = (m) => {
   parts.push(m.edition === 'cierre'
     ? '<p class="callout">⏳ <b>Antes del cierre</b>: las ofertas y pujas se resuelven a las 19:00. Actúa antes.</p>'
     : '<p class="callout">🆕 <b>Mercado nuevo</b>: los valores se actualizan de madrugada, así que las proyecciones usan los de hoy.</p>');
+  if (m.clauseLock?.active) parts.push(`<p class="callout">🔒 <b>Cláusulas bloqueadas hasta ${esc(dt(m.clauseLock.end))}</b> (24 h antes del primer partido): nadie puede clausular; no hace falta blindar todavía.</p>`);
+  else if (m.clauseLock) parts.push(`<p class="callout">🔒 Las cláusulas se bloquearán desde ${esc(dt(m.clauseLock.start))} hasta el primer partido (${esc(dt(m.clauseLock.end))}).</p>`);
   if (!m.trendsOk) parts.push('<p class="callout">⚠️ Sin datos de futbolfantasy hoy: no hay tendencias ni proyecciones.</p>');
 
   // Qué hacer hoy
@@ -115,19 +117,28 @@ export const renderReportHtml = (m) => {
      <span>🪑 <b>Banquillo:</b> ${esc(m.benchByLine.map((p) => `${p.name} (${LINE_LABEL[p.positionId]})`).join(', ') || '—')}</span></div>`,
     m.doubtful.length ? `⚠️ = probabilidad de jugar menor del 60 %: revisa los onces probables antes del cierre.` : ''));
 
-  // Ofertas con ganancia
-  if (m.goodOffers.length) {
+  // Ofertas: buena = ≥ +5 % sobre el valor; fuerte si además hay motivo deportivo
+  if (m.offers.length) {
+    const minPct = Math.round(m.goodOfferPremium * 100);
     const rest = m.offers.length - m.goodOffers.length;
-    parts.push(section('📩 Ofertas que te dan ganancia', table(['Jugador', 'Oferta', 'Ganancia', 'De', 'Caduca'],
-      m.goodOffers.map((o) => [`${pos(o.r)}${esc(o.r.name)}`, esc(M(o.money)), `<span class="pos">${esc(SM(o.gain))}</span>`, esc(o.from), esc(dt(o.expires))])),
-    rest > 0 ? `${rest} oferta(s) más te harían perder dinero respecto a lo que pagaste.` : ''));
+    const heads = ['', 'Jugador', 'Oferta', 'Sobre valor', 'Sobre lo pagado', 'xP', 'Motivo / caduca'];
+    const row = (o) => [
+      o.level === 'fuerte' ? '🔴' : '🟡', `${pos(o.r)}${esc(o.r.name)}`, esc(M(o.money)),
+      `<span class="pos">${esc(PCT(o.premium * 100))}</span>`, `<span class="${signCls(o.gain)}">${esc(SM(o.gain))}</span>`, esc(N(o.r.xp)),
+      `${o.reasons.length ? esc(o.reasons.join(', ')) : '<span class="muted">rinde bien</span>'}<br><span class="small">${esc(o.from)} · ${esc(dt(o.expires))}</span>`,
+    ];
+    const body = m.goodOffers.length
+      ? table(heads, [...m.strongSells, ...m.offerOpportunities].map(row))
+      : `<p class="small">Ninguna oferta llega al +${minPct} % sobre el valor: no compensa vender.</p>`;
+    parts.push(section(`📩 Ofertas recibidas (buena ≥ +${minPct} % sobre el valor)`, body,
+      `🔴 Venta fuerte: buena oferta y motivo deportivo (lesión, poca probabilidad de jugar, fuera del once, mala jornada). 🟡 Oportunidad: buena oferta pero el jugador rinde; véndelo solo si necesitas dinero.${rest > 0 ? ` ${rest} oferta(s) más por debajo del +${minPct} %.` : ''}`));
   }
 
   // Protección
   if (m.mustProtect.length || m.acceptable.length) {
     const body = m.mustProtect.length
       ? table(['Jugador', 'Cláusula', 'Estado', 'Rivales', 'Qué hacer'],
-        m.mustProtect.map((p) => [`${pos(p)}${esc(p.name)}`, esc(M(p.clause)), p.clauseIsOpen ? '<span class="neg">abierta</span>' : esc(`se abre ${dt(p.clauseOpenAt)}`), esc(p.canPay.length), rich(p.reason)]))
+        m.mustProtect.map((p) => [`${pos(p)}${esc(p.name)}`, esc(M(p.clause)), p.clauseIsOpen ? '<span class="neg">abierta</span>' : p.clauseLockedUntil ? esc(`🔒 hasta ${dt(p.clauseLockedUntil)}`) : esc(`se abre ${dt(p.clauseOpenAt)}`), esc(p.canPay.length), rich(p.reason)]))
       : '<p class="small">Ningún jugador importante en riesgo.</p>';
     parts.push(section('🛡️ Protección frente a cláusulas', body,
       m.acceptable.length ? `Expuestos pero asumibles (suplentes; no pierdes dinero si te los clausulan): ${esc(m.acceptable.map((p) => p.name).join(', '))}.` : ''));
@@ -142,7 +153,7 @@ export const renderReportHtml = (m) => {
         `<b>${esc(M(r.maxBid))}</b>${r.bidTooHigh ? '<div class="small neg">la puja habitual la supera</div>' : ''}`,
         `<span class="${signCls(r.gainNLaLiga)}">${esc(SM(r.gainNLaLiga))}</span>`,
         `<span class="${signCls(r.roiN)}">${esc(PCT(r.roiN))}</span>`,
-        trendHtml(r.growthAvg3), esc(r.available),
+        trendHtml(r.growthAvg3, r.growthAvg3Pct), esc(r.available),
       ]))
       : '<p class="small">Hoy no hay ninguna con ganancia esperada.</p>',
     m.econ.length ? `<b>Puja máx. rentable</b>: lo máximo que puedes pagar sin perder dinero si lo vendes a LaLiga en ${m.days} días. En mercado, la ganancia ya descuenta la sobrepuja típica de tu liga.` : ''));
@@ -166,7 +177,7 @@ export const renderReportHtml = (m) => {
   // Plantilla
   parts.push(section('📋 Tu plantilla', table(['Jugador', 'Valor', 'Tendencia/día', 'Ganancia LaLiga', `en ${m.days}d`, 'xP', ''],
     m.squad.map((r) => [
-      `${pos(r)}${esc(r.name)}`, esc(M(r.value)), trendHtml(r.growthAvg3),
+      `${pos(r)}${esc(r.name)}`, esc(M(r.value)), trendHtml(r.growthAvg3, r.growthAvg3Pct),
       `<span class="${signCls(r.latentGainLaLiga)}">${esc(SM(r.latentGainLaLiga))}</span>`,
       `<span class="${signCls(r.gainNLaLiga)}">${esc(SM(r.gainNLaLiga))}</span>`, esc(N(r.xp)),
       esc([STATUS_ICON[r.status], r.inMarket ? '🏷️' : '', r.isShielded ? '🛡️' : r.clauseIsOpen ? '🔓' : ''].filter(Boolean).join(' ')),

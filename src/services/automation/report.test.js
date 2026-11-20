@@ -66,3 +66,29 @@ test('oportunidades: puja máxima rentable, rentabilidad y a quién mejoran de l
   expect(opp.mejoraA).toMatch(/^Jugador(7|8|9|10)$/);
   expect(opp.mejoraPts).toBeGreaterThan(0);
 });
+
+test('ofertas: buena solo con ≥ +5 % sobre el valor; fuerte con motivo deportivo', () => {
+  const myOffers = new Map([
+    ['1', [{ money: 10.4e6 }]], // +4 % → no es buena
+    ['7', [{ money: 11e6 }]], // +10 %, rinde → oportunidad (o fuerte si no está en el once)
+    ['2', [{ money: 11e6 }]], // portero suplente → fuerte
+  ]);
+  const r = buildDailyReport({ ...data, myOffers }, { settings: { projectionDays: 5 } });
+  const of = Object.fromEntries(r.json.ofertasRecibidas.map((o) => [o.jugador, o]));
+  expect(of.Jugador1.recomendacion).toBeNull();
+  expect(of.Jugador2.recomendacion).toBe('fuerte');
+  expect(of.Jugador2.motivos).toContain('no está en tu once');
+  expect(r.json.queHacerHoy.some((t) => t.startsWith('Vende a Jugador2'))).toBe(true);
+  expect(r.json.queHacerHoy.some((t) => t.startsWith('Vende a Jugador1'))).toBe(false);
+});
+
+test('cláusulas bloqueadas 24 h antes del primer partido', () => {
+  const kickoff = new Date(Date.now() + 5 * 3600 * 1000).toISOString();
+  const teams = [data.teams[0], { ...data.teams[1], players: [{ ...data.teams[1].players[0], buyoutClauseLockedEndTime: null }] }];
+  const r = buildDailyReport({ ...data, teams, matchday: { week: 13, kickoff } }, { settings: { projectionDays: 5 } });
+  expect(r.json.clausulasBloqueadas.ahora).toBe(true);
+  expect(r.json.inicioJornada).toBe(kickoff);
+  expect(r.markdown).toContain('cláusulas bloqueadas hasta');
+  // La cláusula del rival (abierta) no se puede pagar hasta el primer partido
+  expect(r.clauseWatch.every((w) => w.openAt === kickoff)).toBe(true);
+});

@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     writePdf: (name, html) => ipcRenderer.invoke('automation:write-pdf', { name, html }),
     notify: (title, body) => ipcRenderer.invoke('automation:notify', { title, body }),
     dailyRunFinished: (reason) => ipcRenderer.invoke('automation:daily-run-finished', reason),
+    scheduleMatchdaySummary: (at) => ipcRenderer.invoke('automation:schedule-matchday-summary', at),
     onRunNow: (cb) => {
       const sub = (_e, d) => cb(d);
       ipcRenderer.on('automation:run-now', sub);

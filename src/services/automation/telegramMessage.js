@@ -19,7 +19,8 @@ export const buildTelegramSummary = (model) => {
   lines.push('');
   lines.push(`🏆 ${tgEscape(k.rank || '?')}º · ${tgEscape(k.points)} pts${isNum(k.gap) ? ` (${k.gap >= 0 ? '+' : ''}${tgEscape(k.gap)} vs ${tgEscape(k.closest)})` : ''}`);
   lines.push(`💶 Saldo <b>${tgEscape(M(k.money))}</b> · Equipo ${tgEscape(M(k.teamValue, 0))} · LaLiga hoy ${tgEscape(SM(k.gainLaLiga))}`);
-  if (model.weekStart) lines.push(`📅 Jornada ${tgEscape(model.week)} empieza ${tgEscape(dt(model.weekStart))}`);
+  if (model.weekStart) lines.push(`📅 Jornada ${tgEscape(model.week)}: primer partido ${tgEscape(dt(model.weekStart))}`);
+  if (model.clauseLock?.active) lines.push(`🔒 Cláusulas bloqueadas hasta ${tgEscape(dt(model.clauseLock.end))}`);
   lines.push('');
   if (model.edition === 'cierre') lines.push('<i>Las ofertas y pujas se resuelven a las 19:00: actúa antes.</i>');
   else lines.push('<i>Mercado nuevo. Los valores se actualizan de madrugada: las proyecciones usan los de hoy.</i>');

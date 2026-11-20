@@ -51,6 +51,8 @@ export const computeProfitability = ({
   const valueN = isNum(value) && isNum(rate) ? value + days * rate : null;
   const laLigaN = isNum(valueN) ? valueN * LALIGA_OFFER_FACTOR : null;
   const valueM = isNum(value) && value > 0 ? value / 1e6 : null;
+  // Crecimiento relativo: sobre el valor del día anterior (valor actual − subida de un día)
+  const pctOf = (r) => (isNum(r) && isNum(value) && value - r > 0 ? (r / (value - r)) * 100 : null);
 
   return {
     buyPrice,
@@ -63,6 +65,8 @@ export const computeProfitability = ({
     dailyGrowth: rates.daily,
     growthAvg3: rates.avg3,
     growthAvg7: rates.avg7,
+    dailyGrowthPct: pctOf(rates.daily),
+    growthAvg3Pct: pctOf(rates.avg3),
     valueN,
     laLigaN,
     gainN: diffOrNull(valueN, buyPrice),

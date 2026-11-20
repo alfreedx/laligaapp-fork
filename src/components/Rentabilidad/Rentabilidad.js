@@ -10,6 +10,9 @@ import { buildBidStats, recentActivity } from '../../services/analytics/rivalInt
 import { loadState } from '../../services/automation/localStore';
 import { getClauseTimeRemaining } from '../../utils/clauseUtils';
 import LoadingState from '../Common/LoadingState';
+import RentabilidadFilters from './RentabilidadFilters';
+import { applyFilters, EMPTY_FILTERS, clauseOverValue } from '../../services/analytics/filters';
+import { applyClauseLock, isClauseLocked } from '../../services/analytics/matchday';
 import ErrorState from '../Common/ErrorState';
 
 // ---------- formato ----------
@@ -17,6 +20,7 @@ const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const fmtM = (v, digits = 2) => (isNum(v) ? `${(v / 1e6).toLocaleString('es-ES', { minimumFractionDigits: digits, maximumFractionDigits: digits })} M` : '—');
 const fmtK = (v) => (isNum(v) ? `${v >= 0 ? '+' : ''}${(v / 1e3).toLocaleString('es-ES', { maximumFractionDigits: 0 })} K` : '—');
 const fmtPct = (v) => (isNum(v) ? `${v >= 0 ? '+' : ''}${v.toLocaleString('es-ES', { maximumFractionDigits: 1 })} %` : '—');
+const fmtPct2 = (v) => (isNum(v) ? `${v >= 0 ? '+' : ''}${v.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %` : '—');
 const fmtNum = (v, d = 1) => (isNum(v) ? v.toLocaleString('es-ES', { maximumFractionDigits: d }) : '—');
 const fmtDate = (v) => (v ? new Date(v).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 const signClass = (v) => (!isNum(v) ? 'text-gray-400' : v > 0 ? 'text-green-600 dark:text-green-400' : v < 0 ? 'text-red-600 dark:text-red-400' : '');
@@ -25,12 +29,15 @@ const VIA_LABEL = { mercado: 'Mercado', manager: 'Manager', clausula: 'Cláusula
 
 const clauseCell = (r) => {
   if (r.isShielded) return '🛡️ Blindado';
+  if (r.clauseLockedUntil) return `🔒 Jornada · ${fmtDate(r.clauseLockedUntil)}`;
   if (r.clauseIsOpen) return '🟢 Abierta';
   return `🔒 ${getClauseTimeRemaining(r.clauseOpenAt) || ''}`;
 };
 
 // ---------- columnas ----------
 const col = (key, label, opts = {}) => ({ key, label, ...opts });
+const growthPct = col('dailyGrowthPct', 'Crec. %', { fmt: fmtPct2, num: true, colored: true, title: 'Crecimiento del último día en % sobre el valor anterior' });
+const avg3Pct = col('growthAvg3Pct', 'Media 3d %', { fmt: fmtPct2, num: true, colored: true, title: 'Crecimiento medio diario de los últimos 3 días, en %' });
 const money = (key, label, title) => col(key, label, { fmt: fmtM, num: true, title });
 const gain = (key, label, title) => col(key, label, { fmt: fmtM, num: true, colored: true, title });
 
@@ -46,7 +53,9 @@ const profitCols = (n) => [
   gain('latentGain', 'G. latente', 'Valor actual − precio de compra'),
   gain('latentGainLaLiga', 'G. latente LaLiga', 'Valor +10 % − precio de compra'),
   col('dailyGrowth', 'Crec. diario', { fmt: fmtK, num: true, colored: true }),
+  growthPct,
   col('growthAvg3', 'Media 3d', { fmt: fmtK, num: true, colored: true, title: 'Crecimiento medio diario de los últimos 3 días' }),
+  avg3Pct,
   money('valueN', `Valor en ${n}d`, 'Si sigue al mismo ritmo'),
   money('laLigaN', `LaLiga en ${n}d`, `Valor en ${n} días +10 %`),
   gain('gainN', `G. ${n}d`, `Valor en ${n} días − precio de compra`),
@@ -83,6 +92,8 @@ const columnsFor = (tab, n) => {
         col('acquiredVia', 'Vía', { fmt: (v) => VIA_LABEL[v] || v }),
         col('inMarket', 'En mercado', { render: (r) => (r.inMarket ? `🏷️ hasta ${fmtDate(r.marketExpiration)}` : '—'), sortValue: (r) => (r.inMarket ? 1 : 0) }),
         col('clauseOpenAt', 'Cláusula', { render: clauseCell, sortValue: (r) => (r.clauseIsOpen ? 0 : new Date(r.clauseOpenAt).getTime()) }),
+        money('clause', 'Importe cláusula'),
+        col('clauseOverValuePct', 'Cláus. vs valor', { fmt: fmtPct, num: true, title: 'Cuánto supera la cláusula al valor de mercado' }),
       ];
     case 'market':
       return [
@@ -91,7 +102,9 @@ const columnsFor = (tab, n) => {
         money('buyPrice', 'Precio'),
         money('value', 'Valor'),
         col('dailyGrowth', 'Crec. diario', { fmt: fmtK, num: true, colored: true }),
+        growthPct,
         col('growthAvg3', 'Media 3d', { fmt: fmtK, num: true, colored: true }),
+        avg3Pct,
         money('valueN', `Valor en ${n}d`),
         gain('gainN', `G. ${n}d`, `Valor en ${n} días − precio`),
         gain('gainNLaLiga', `G. ${n}d LaLiga`, `Valor en ${n} días +10 % − precio`),
@@ -112,6 +125,7 @@ const columnsFor = (tab, n) => {
         col('clauseOpenAt', 'Apertura', { render: clauseCell, sortValue: (r) => (r.isShielded ? Infinity : r.clauseIsOpen ? 0 : new Date(r.clauseOpenAt).getTime()) }),
         gain('clauseGainN', `Tu g. ${n}d LaLiga`, `Si lo clausulas hoy y LaLiga te ofrece +10 % en ${n} días`),
         col('dailyGrowth', 'Crec. diario', { fmt: fmtK, num: true, colored: true }),
+        growthPct,
         ...sportCols,
       ];
     case 'money':
@@ -263,11 +277,16 @@ const Rentabilidad = () => {
   const [days, setDays] = useState(5);
   const [search, setSearch] = useState('');
   const [position, setPosition] = useState('all');
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [sorts, setSorts] = useState(DEFAULT_SORT);
   // Gasto en subidas de cláusula detectado por el trabajo diario (capturas)
   const [clauseSpend, setClauseSpend] = useState(null);
+  // Primer partido de la próxima jornada (lo guarda el informe diario): bloqueo de cláusulas 24 h antes
+  const [kickoff, setKickoff] = useState(null);
   useEffect(() => {
     loadState().then((st) => {
+      setKickoff(st?.nextKickoff || null);
       const m = new Map();
       Object.values(st?.clauseRaises || {}).forEach((day) => Object.entries(day).forEach(([id, r]) => {
         m.set(id, (m.get(id) || 0) + (r.estimatedCost || 0));
@@ -280,7 +299,7 @@ const Rentabilidad = () => {
     const common = { ledger: a.ledger, resolveTrend: a.resolveTrend, rateMode };
     let r;
     switch (tab) {
-      case 'squad': r = buildSquadRows({ ...common, team: a.myTeam }); break;
+      case 'squad': r = buildSquadRows({ ...common, team: a.myTeam }).map((x) => applyClauseLock(x, kickoff)); break;
       case 'lineup': {
         const squad = buildSquadRows({ ...common, team: a.myTeam });
         const lu = bestLineup(squad);
@@ -298,9 +317,9 @@ const Rentabilidad = () => {
       }
       case 'market':
         r = buildMarketRows({ ...common, market: a.market, ownerByPlayer: a.ownerByPlayer })
-          .filter((x) => !a.myTeam || x.sellerId !== a.myTeam.managerId); // sin mis propios jugadores
+          .filter((x) => !x.sellerId); // solo jugadores que pone LaLiga (ni míos ni de otros managers)
         break;
-      case 'rivals': r = buildRivalRows({ ...common, teams: a.teams, myTeamId: a.myTeamId }); break;
+      case 'rivals': r = buildRivalRows({ ...common, teams: a.teams, myTeamId: a.myTeamId }).map((x) => applyClauseLock(x, kickoff)); break;
       case 'money': {
         const stats = buildBidStats({ ledger: a.ledger, trendById: a.trendById });
         const recent = recentActivity(a.ledger, { days: 7 });
@@ -318,7 +337,7 @@ const Rentabilidad = () => {
       default: r = [];
     }
     return r;
-  }, [tab, a.ledger, a.resolveTrend, a.trendById, a.myTeam, a.market, a.ownerByPlayer, a.teams, a.myTeamId, a.myMoney, a.playerNames, rateMode, clauseSpend]);
+  }, [tab, a.ledger, a.resolveTrend, a.trendById, a.myTeam, a.market, a.ownerByPlayer, a.teams, a.myTeamId, a.myMoney, a.playerNames, rateMode, clauseSpend, kickoff]);
 
   // Recalcular proyecciones con N días distinto de 5
   const rowsN = useMemo(() => {
@@ -338,14 +357,19 @@ const Rentabilidad = () => {
     });
   }, [rows, days, rateMode, tab]);
 
+  const filterable = ['squad', 'market', 'rivals'].includes(tab);
+  const owners = useMemo(() => (tab === 'rivals' ? [...new Set(rowsN.map((r) => r.owner).filter(Boolean))].sort((x, y) => x.localeCompare(y, 'es')) : []), [rowsN, tab]);
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rowsN.filter((r) => {
+    const base = rowsN.filter((r) => {
       if (position !== 'all' && r.positionId !== undefined && String(r.positionId) !== position) return false;
       if (!q) return true;
       return [r.name, r.fullName, r.owner, r.seller, r.team].some((s) => s && s.toLowerCase().includes(q));
-    });
-  }, [rowsN, search, position]);
+    }).map((r) => (r.clauseOverValuePct === undefined && 'clause' in r ? { ...r, clauseOverValuePct: clauseOverValue(r) } : r));
+    if (!filterable) return base;
+    const rate = rateMode === 'avg3' ? 'growthAvg3' : rateMode === 'avg7' ? 'growthAvg7' : 'dailyGrowth';
+    return applyFilters(base, filters, { tab, myMoney: a.myMoney, rate });
+  }, [rowsN, search, position, filters, filterable, tab, rateMode, a.myMoney]);
 
   const columns = columnsFor(tab, days);
   const sort = sorts[tab];
@@ -449,8 +473,18 @@ const Rentabilidad = () => {
             onChange={(e) => setDays(Math.max(1, Math.min(30, parseInt(e.target.value, 10) || 5)))}
           />
         </label>
+        {isClauseLocked(kickoff) && ['squad', 'rivals'].includes(tab) && (
+          <span className="text-xs text-amber-700 dark:text-amber-400">🔒 Cláusulas bloqueadas hasta el primer partido ({fmtDate(kickoff)})</span>
+        )}
         {!a.trendsReady && <span className="text-xs text-amber-600">Cargando tendencias de futbolfantasy…</span>}
       </div>
+
+      {filterable && (
+        <RentabilidadFilters
+          tab={tab} filters={filters} setFilters={setFilters} owners={owners} days={days}
+          open={filtersOpen} setOpen={setFiltersOpen}
+        />
+      )}
 
       <div className="card p-0 overflow-hidden max-w-full">
         <SortableTable rows={filtered} columns={columns} sort={sort} onSort={onSort} />

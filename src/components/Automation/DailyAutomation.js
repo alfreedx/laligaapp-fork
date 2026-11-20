@@ -3,6 +3,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { runDailyJob, isRunDue } from '../../services/automation/dailyJob';
 import { loadSettings, loadState } from '../../services/automation/localStore';
 import { checkClauseAlerts } from '../../services/automation/clauseAlerts';
+import { runMatchdayJob, isMatchdaySummaryDue } from '../../services/automation/matchdayJob';
 
 const CHECK_EVERY_MS = 60 * 1000;
 
@@ -34,8 +35,23 @@ const DailyAutomation = () => {
       return runDailyJob({ leagueId: lid, user: u, leagueName: lname, source });
     };
 
+    // Resumen de inicio de jornada (1 h antes del primer partido)
+    const runMatchday = async (force = false) => {
+      const [settings, state] = await Promise.all([loadSettings(), loadState()]);
+      // La tarea programada fuerza la hora, pero nunca se envía dos veces para el mismo partido
+      const alreadySent = !!state.lastMatchdaySummaryFor && state.lastMatchdaySummaryFor === state.nextKickoff;
+      if (force ? alreadySent : !isMatchdaySummaryDue(state, settings)) return { success: true, skipped: true };
+      const { leagueId: lid, leagueName: lname, user: u } = ctx.current;
+      return runMatchdayJob({ leagueId: lid, user: u, leagueName: lname });
+    };
+
     (async () => {
       const cfg = ea ? await ea.getConfig() : {};
+      if (cfg.isDailyRun && cfg.dailyRunMode === 'matchday') {
+        const r = await runMatchday(true);
+        if (!cancelled) await ea.dailyRunFinished(r?.success ? 'ok' : 'error');
+        return;
+      }
       // Lanzada por la tarea programada: ejecutar siempre y cerrar al terminar.
       const result = await run(cfg.isDailyRun ? 'scheduler' : 'startup', !!cfg.isDailyRun);
       if (cfg.isDailyRun && !cancelled) await ea.dailyRunFinished(result?.success ? 'ok' : 'error');
@@ -44,8 +60,9 @@ const DailyAutomation = () => {
     const timer = setInterval(() => {
       run('timer');
       checkClauseAlerts().catch(() => {});
+      runMatchday().catch(() => {});
     }, CHECK_EVERY_MS);
-    const unsub = ea?.onRunNow?.(() => { run('scheduler', true); });
+    const unsub = ea?.onRunNow?.((d) => { if (d?.mode === 'matchday') runMatchday(true); else run('scheduler', true); });
 
     return () => {
       cancelled = true;

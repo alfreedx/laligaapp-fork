@@ -26,8 +26,19 @@ a **LaLigaApp 3.5.7** de Externoak y cuándo. Para el historial del proyecto ori
 - **Notificaciones al móvil por Telegram** (bot propio): resumen con *Qué hacer*, PDF adjunto,
   avisos de cláusulas y errores. Clave del bot cifrada con `safeStorage` en el proceso principal.
 - Los avisos de cláusulas llegan **2 minutos antes** de la apertura («Cláusula en 2 min»).
+- **Inicio de jornada**: se lee el primer partido del calendario. Las cláusulas se tratan como
+  **bloqueadas** desde 24 h antes hasta ese partido (protección, oportunidades, avisos y Rentabilidad).
+- **Resumen de inicio de jornada** por Telegram 1 h antes del primer partido: puntos previstos de la
+  alineación guardada, alertas (lesionados, dudas, sin capitán) y cambios frente a la recomendada.
+  Se programa solo con una tarea de Windows de un solo uso que despierta el equipo.
+- **Ofertas**: buena solo si supera el valor en un **5 %** o más; *Venta fuerte* (con motivo
+  deportivo: lesión, poca probabilidad de jugar, fuera del once, mala jornada) u *Oportunidad*.
+- Rentabilidad: **crecimiento diario en %** además del absoluto (también en el informe) y
+  **filtros** (estado y apertura de cláusula, cláusula vs valor por rangos, valor, tendencia,
+  estado, probabilidad de jugar, xP, dueño, asequible con mi saldo, rentable en N días).
 
 ### Cambiado
+- Rentabilidad → *Mercado hoy*: solo los jugadores que pone LaLiga (sin los de otros managers).
 - El README original de LaLigaApp se conserva íntegro en `docs/upstream/`.
 - Repositorio público.
 

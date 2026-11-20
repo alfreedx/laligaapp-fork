@@ -18,6 +18,8 @@ export const K = (v) => {
 };
 export const N = (v, d = 1) => (isNum(v) ? v.toFixed(d).replace('.', ',') : '—');
 export const PCT = (v) => (isNum(v) ? `${v >= 0 ? '+' : '−'}${N(Math.abs(v), 0)} %` : '—');
+// Porcentaje con 2 decimales (crecimientos diarios: suelen ser < 1 %)
+export const PCT2 = (v) => (isNum(v) ? `${v >= 0 ? '+' : '−'}${N(Math.abs(v), 2)} %` : '—');
 export const dt = (v) => (v ? new Date(v).toLocaleString('es-ES', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 export const STATUS_ICON = { ok: '', injured: '🚑', doubtful: '❓', suspended: '🟥', not_available: '⛔' };
 export const LINE_LABEL = { 1: 'POR', 2: 'DEF', 3: 'MED', 4: 'DEL' };
