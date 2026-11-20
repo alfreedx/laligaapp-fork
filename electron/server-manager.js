@@ -78,11 +78,11 @@ async function ensureUnifiedServer(activeAppOrigins) {
         return unifiedServerInstance;
     }
 
-    // Accesible en la LAN por defecto: abrir la app desde el móvil es una
-    // función anunciada. El allowlist de orígenes se limita abajo a las IPs
-    // propias. Para restringir a esta máquina: ELECTRON_SERVER_HOST=127.0.0.1.
+    // Fork: solo esta máquina por defecto (el proxy lleva la sesión de la cuenta y no
+    // debe quedar expuesto en redes Wi-Fi públicas). Para usar la versión web desde el
+    // móvil en la red local: ELECTRON_SERVER_HOST=0.0.0.0 (o APP_HOST).
     const hostEnv = process.env.ELECTRON_SERVER_HOST || process.env.APP_HOST || process.env.HOST;
-    const host = hostEnv && hostEnv.trim() ? hostEnv.trim() : '0.0.0.0';
+    const host = hostEnv && hostEnv.trim() ? hostEnv.trim() : '127.0.0.1';
     const envPort = parsePort(process.env.ELECTRON_SERVER_PORT || process.env.APP_PORT || process.env.PORT);
 
     const baseAppConfig = {

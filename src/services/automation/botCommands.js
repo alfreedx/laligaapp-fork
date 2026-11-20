@@ -73,6 +73,7 @@ export const HELP_TEXT = [
   '🤖 <b>Comandos</b>',
   '<code>/clausula nombre</code>: cuándo se abre la cláusula de un jugador de la liga, precio y si te llega. Te avisa 2 min antes y te manda un evento con alarma para el calendario.',
   '<code>/avisos</code>: avisos de cláusula pendientes.',
+  '<code>/estado</code>: último informe, próxima jornada y errores recientes de la automatización.',
   '<i>Respondo mientras la app esté abierta en el PC (o al despertarse).</i>',
 ].join('\n');
 
@@ -80,6 +81,23 @@ export const remindersReply = (list, now = new Date()) => {
   const pending = (list || []).filter((w) => new Date(w.openAt) > now).sort((a, b) => new Date(a.openAt) - new Date(b.openAt));
   if (!pending.length) return 'No tienes avisos de cláusula pendientes. Usa <code>/clausula nombre</code>.';
   return ['⏰ <b>Avisos pendientes</b>', ...pending.map((w) => `• ${tgEscape(w.name)} (${tgEscape(w.owner || 'tuyo')}): ${tgEscape(dt(w.openAt))}`)].join('\n');
+};
+
+/** Estado de la automatización (último informe, jornada, avisos y errores recientes). */
+export const statusReply = ({ state = {}, reminders = [], logLines = [], now = new Date() }) => {
+  const lines = ['🩺 <b>Estado</b>'];
+  lines.push(state.lastSuccessAt
+    ? `📄 Último informe: ${tgEscape(dt(state.lastSuccessAt))}${state.lastEdition ? ` (${tgEscape(state.lastEdition)})` : ''}`
+    : '📄 Aún no hay informes.');
+  if (state.lastError) lines.push(`⚠️ ${tgEscape(state.lastError)}`);
+  if (state.nextKickoff) lines.push(`⚽ Primer partido: ${tgEscape(dt(state.nextKickoff))}${state.lastMatchdaySummaryFor === state.nextKickoff ? ' (resumen enviado)' : ''}`);
+  const pending = (reminders || []).filter((w) => new Date(w.openAt) > now).length;
+  lines.push(`⏰ Avisos de cláusula pendientes: ${pending}`);
+  const problems = (logLines || []).filter((l) => / (WARN|ERROR) /.test(l)).slice(-5);
+  lines.push('');
+  lines.push(problems.length ? '<b>Últimos problemas</b>' : '✅ Sin errores recientes en el registro.');
+  problems.forEach((l) => lines.push(`<code>${tgEscape(l.slice(0, 160))}</code>`));
+  return lines.join('\n');
 };
 
 // ------------------------------------------------------------ calendario

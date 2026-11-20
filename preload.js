@@ -45,6 +45,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     dailyRunFinished: (reason) => ipcRenderer.invoke('automation:daily-run-finished', reason),
     scheduleMatchdaySummary: (at) => ipcRenderer.invoke('automation:schedule-matchday-summary', at),
     scheduleClauseReminders: (times) => ipcRenderer.invoke('automation:schedule-clause-reminders', times),
+    log: (level, source, message) => ipcRenderer.invoke('automation:log', { level, source, message }),
+    readLog: (lines) => ipcRenderer.invoke('automation:read-log', lines),
     onRunNow: (cb) => {
       const sub = (_e, d) => cb(d);
       ipcRenderer.on('automation:run-now', sub);

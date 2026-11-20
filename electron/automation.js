@@ -6,6 +6,7 @@
 const { app, ipcMain, dialog, shell, Notification, powerSaveBlocker, BrowserWindow, session } = require('electron');
 const { execFile } = require('child_process');
 const fs = require('fs');
+const { logEvent, readLog } = require('./automation-log');
 const path = require('path');
 
 const CONFIG_FILE = () => path.join(app.getPath('userData'), 'fantasy-automation.json');
@@ -106,6 +107,7 @@ function registerAutomation({ getMainWindow }) {
                 }).show();
             }
             console.log(`[automation] daily run terminado (${reason}); cerrando app`);
+            logEvent(reason === 'ok' ? 'info' : 'warn', 'daily-run', `${runMode()} terminado: ${reason}`);
             setTimeout(() => app.quit(), 3000);
         }
     };
@@ -234,6 +236,12 @@ function registerAutomation({ getMainWindow }) {
             if (win && !win.isDestroyed()) win.destroy();
         }
     });
+
+    ipcMain.handle('automation:log', (_event, { level, source, message } = {}) => {
+        logEvent(level, source, message);
+        return true;
+    });
+    ipcMain.handle('automation:read-log', (_event, lines) => readLog(Number(lines) || 50));
 
     ipcMain.handle('automation:notify', (_event, { title, body } = {}) => {
         if (!Notification.isSupported()) return false;

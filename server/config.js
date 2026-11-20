@@ -46,10 +46,9 @@ const bundledAllowedOrigins = [
 // añade en runtime los orígenes de las IPs LAN propias (http://<ip>:*).
 const defaultAllowedOrigins = bundledAllowedOrigins;
 
-// Accesible en la LAN por defecto: abrir la app desde el móvil en la red
-// local es una función anunciada (ver README). APP_HOST=127.0.0.1 restringe
-// el servidor a esta máquina.
-const derivedDefaultHost = process.env.APP_HOST || process.env.HOST || '0.0.0.0';
+// Fork: solo esta máquina por defecto. APP_HOST=0.0.0.0 lo abre a la red local
+// (versión web desde el móvil con QR); no recomendable en Wi-Fi públicas.
+const derivedDefaultHost = process.env.APP_HOST || process.env.HOST || '127.0.0.1';
 
 const defaultConfig = {
   env: process.env.NODE_ENV || 'development',

@@ -13,6 +13,7 @@ import { loadSettings, loadState, saveState } from './localStore';
 import { buildMatchdaySummary, renderMatchdayTelegram } from './matchdaySummary';
 import { MATCHDAY_SUMMARY_LEAD_MS } from '../analytics/matchday';
 import { N, dt } from './reportFormat';
+import { logEvent } from './log';
 
 /** ¿Toca enviar el resumen? (función pura) */
 export const isMatchdaySummaryDue = (state, settings, now = new Date()) => {
@@ -59,8 +60,10 @@ export const runMatchdayJob = async ({ leagueId, user, leagueName }) => {
         lastMatchdaySummaryFor: data.matchday?.kickoff || state.nextKickoff,
         lastMatchdaySummaryAt: new Date().toISOString(),
       });
+      logEvent('info', 'resumen-jornada', `J${summary.week ?? '?'} enviado (${N(summary.total)} pts previstos)`);
       return { success: true, summary };
     } catch (error) {
+      logEvent('error', 'resumen-jornada', error.message);
       if (ea) await ea.notify('Resumen de jornada: error', error.message);
       return { success: false, error: error.message };
     }

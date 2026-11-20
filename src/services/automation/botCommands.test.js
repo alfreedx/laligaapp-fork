@@ -1,5 +1,5 @@
 import {
-  parseCommand, findPlayers, clauseReply, buildClauseIcs, icsFileName, remindersReply, ambiguousReply,
+  parseCommand, findPlayers, clauseReply, buildClauseIcs, icsFileName, remindersReply, ambiguousReply, statusReply,
 } from './botCommands';
 
 test('parsea comandos (con @bot, alias y sin acentos)', () => {
@@ -51,4 +51,19 @@ test('lista de avisos pendientes', () => {
   const now = new Date('2026-11-20T12:00:00Z');
   expect(remindersReply([], now)).toContain('No tienes');
   expect(remindersReply([{ name: 'X', owner: 'Ana', openAt: '2026-11-21T10:00:00Z' }, { name: 'Y', openAt: '2026-11-19T10:00:00Z' }], now)).toContain('X (Ana)');
+});
+
+test('/estado: último informe, avisos y solo los problemas del registro', () => {
+  const now = new Date('2026-11-20T12:00:00Z');
+  const t = statusReply({
+    state: { lastSuccessAt: '2026-11-20T10:00:00Z', lastEdition: 'apertura', nextKickoff: '2026-11-20T20:00:00Z' },
+    reminders: [{ openAt: '2026-11-21T10:00:00Z' }, { openAt: '2026-11-19T10:00:00Z' }],
+    logLines: ['2026-11-20T09:00:00Z INFO [informe] ok', '2026-11-20T09:01:00Z ERROR [bot] fallo <x>'],
+    now,
+  });
+  expect(t).toContain('apertura');
+  expect(t).toContain('pendientes: 1');
+  expect(t).toContain('fallo &lt;x&gt;');
+  expect(t).not.toContain('[informe] ok');
+  expect(statusReply({ logLines: [] })).toContain('Sin errores');
 });

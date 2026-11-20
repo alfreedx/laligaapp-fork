@@ -7,6 +7,7 @@
  */
 import { loadSettings, loadState, readJson, writeJson } from './localStore';
 import { buildTelegramClauseAlert } from './telegramMessage';
+import { logEvent } from './log';
 
 const NOTIFIED_FILE = 'clause-alerts.json';
 const REMINDERS_FILE = 'clause-reminders.json'; // = botHandler.REMINDERS_FILE (sin importar el módulo del bot)
@@ -54,9 +55,11 @@ export const checkClauseAlerts = async ({ leadMs = CLAUSE_LEAD_MS } = {}) => {
     // Los pedidos con /clausula siempre van a Telegram; los del informe, según Ajustes
     if (tg && settings.telegramEnabled && (w.manual || settings.telegramClauseAlerts)) {
       // eslint-disable-next-line no-await-in-loop
-      await tg.sendMessage(buildTelegramClauseAlert(w, minutesLeft)).catch(() => {});
+      const r = await tg.sendMessage(buildTelegramClauseAlert(w, minutesLeft)).catch((e) => ({ success: false, error: e.message }));
+      if (!r?.success) logEvent('warn', 'aviso-clausula', `Telegram falló (${w.name}): ${r?.error}`);
     }
     notified.push(`${w.id}|${w.openAt}`);
+    logEvent('info', 'aviso-clausula', `${w.name}: ${title}`);
   }
   if (due.length) await writeJson(NOTIFIED_FILE, notified.slice(-300));
   return due.length;

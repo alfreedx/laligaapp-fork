@@ -16,6 +16,7 @@ import { buildPredictionRecord, actualPointsForWeek, evaluateWeek } from '../ana
 import { currentEdition, EDITIONS } from './schedule';
 import { buildTelegramSummary, buildTelegramError } from './telegramMessage';
 import { matchdaySummaryTime } from './matchdayJob';
+import { logEvent } from './log';
 
 export { isRunDue } from './schedule';
 
@@ -151,6 +152,7 @@ export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual
         matchdayTaskAt: matchdayTaskError ? state.matchdayTaskAt || null : summaryAt || state.matchdayTaskAt || null,
       };
       await saveState(newState);
+      logEvent(warnings.length ? 'warn' : 'info', 'informe', `${edition} (${source}) generado${warnings.length ? `, pero ${warnings.join('; ')}` : ''}`);
 
       if (ea) {
         const parts = [`${report.counts.econ} oportunidades de mercado`, `${report.counts.clauseSoon} cláusulas en 48 h`];
@@ -160,10 +162,11 @@ export const runDailyJob = async ({ leagueId, user, leagueName, source = 'manual
       }
       return { success: true, state: newState, report };
     } catch (error) {
+      logEvent('error', 'informe', `${edition} (${source}): ${error.message}`);
       const newState = { ...state, lastRunAt: startedAt, lastError: error.message, lastSource: source };
       await saveState(newState);
       if (ea) await ea.notify('Informe Fantasy: error', error.message);
-      if (tg) await tg.sendMessage(buildTelegramError(error.message)).catch(() => {});
+      if (tg) await tg.sendMessage(buildTelegramError(error.message)).catch((e) => logEvent('warn', 'informe', `Telegram: ${e.message}`));
       return { success: false, error: error.message, state: newState };
     }
   })();

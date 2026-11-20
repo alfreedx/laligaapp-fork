@@ -2,6 +2,11 @@ import { getClauseTimeRemaining, getClauseStatusColor, isClauseExpiringSoon, get
 
 const hoursFromNow = (h) => new Date(Date.now() + h * 60 * 60 * 1000).toISOString();
 
+// Reloj fijo: sin esto, el paso de unos milisegundos entre crear la fecha y formatearla
+// convertía "2d 2h" en "2d 1h" de forma aleatoria.
+beforeAll(() => { jest.useFakeTimers('modern'); jest.setSystemTime(new Date('2026-11-20T12:00:00Z')); });
+afterAll(() => { jest.useRealTimers(); });
+
 describe('getClauseTimeRemaining', () => {
     test('sin fecha devuelve noTimeValue (null por defecto)', () => {
         expect(getClauseTimeRemaining(null)).toBeNull();

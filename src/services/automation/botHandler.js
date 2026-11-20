@@ -4,13 +4,14 @@
  * responde; nunca hace acciones en la cuenta.
  */
 import { loadClauseData } from './dataLoader';
-import { readJson, writeJson } from './localStore';
+import { readJson, writeJson, loadState } from './localStore';
 import { buildSquadRows, buildRivalRows } from '../analytics/rows';
 import { applyClauseLock } from '../analytics/matchday';
 import {
-  parseCommand, findPlayers, clauseReply, ambiguousReply, remindersReply, buildClauseIcs, icsFileName, HELP_TEXT,
+  parseCommand, findPlayers, clauseReply, ambiguousReply, remindersReply, statusReply, buildClauseIcs, icsFileName, HELP_TEXT,
 } from './botCommands';
 import { tgEscape } from './telegramMessage';
+import { logEvent } from './log';
 
 export const REMINDERS_FILE = 'clause-reminders.json';
 const KEEP_AFTER_MS = 12 * 3600 * 1000;
@@ -27,7 +28,10 @@ export const saveReminders = async (list, now = new Date()) => {
     .filter((t) => t > now.getTime())
     .map((t) => new Date(t).toISOString());
   const ea = window.electronAPI?.automation;
-  if (ea?.scheduleClauseReminders) await ea.scheduleClauseReminders(times).catch(() => null);
+  if (ea?.scheduleClauseReminders) {
+    const r = await ea.scheduleClauseReminders(times).catch((e) => ({ success: false, error: e.message }));
+    if (!r?.success) logEvent('warn', 'avisos', `no se pudo programar la tarea: ${r?.error}`);
+  }
   return kept;
 };
 
@@ -73,8 +77,13 @@ export const handleBotMessage = async (msg, ctx) => {
     if (!cmd || cmd.command === 'ayuda') return await send(HELP_TEXT);
     if (cmd.command === 'clausula') return await clauseCommand(cmd.args, ctx);
     if (cmd.command === 'avisos') return await send(remindersReply(await loadReminders()));
+    if (cmd.command === 'estado') {
+      const logLines = (await window.electronAPI?.automation?.readLog?.(200)) || [];
+      return await send(statusReply({ state: await loadState(), reminders: await loadReminders(), logLines }));
+    }
     return await send(`No conozco /${tgEscape(cmd.command)}.\n\n${HELP_TEXT}`);
   } catch (error) {
+    logEvent('error', 'bot', `${cmd?.command || '?'}: ${error.message}`);
     return send(`⚠️ No he podido consultarlo: ${tgEscape(error.message)}`);
   }
 };

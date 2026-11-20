@@ -10,6 +10,7 @@
  */
 const { app, ipcMain, safeStorage } = require('electron');
 const fs = require('fs');
+const { logEvent } = require('./automation-log');
 const path = require('path');
 
 const API = 'https://api.telegram.org';
@@ -74,6 +75,7 @@ const sendMessage = async (text) => {
 const COMMANDS = [
     { command: 'clausula', description: 'Cuándo se abre la cláusula de un jugador (y alarma)' },
     { command: 'avisos', description: 'Avisos de cláusula pendientes' },
+    { command: 'estado', description: 'Estado de los informes y errores recientes' },
     { command: 'ayuda', description: 'Qué puedo hacer' },
 ];
 const MAX_MESSAGE_AGE_S = 24 * 3600;
@@ -87,12 +89,14 @@ const createBot = () => {
     let paused = false;
     let offset = 0;
     let target = null; // webContents que atiende los comandos
+    let lastError = null;
 
     const loop = async () => {
         while (running) {
             if (paused) { await new Promise((r) => setTimeout(r, 1000)); continue; }
             try {
                 const updates = await call('getUpdates', { json: { offset, timeout: 25, allowed_updates: ['message'] } });
+                lastError = null;
                 for (const u of updates) {
                     offset = Math.max(offset, u.update_id + 1);
                     const msg = u.message;
@@ -101,9 +105,12 @@ const createBot = () => {
                     if (!msg?.text || !chatId || String(msg.chat?.id) !== String(chatId)) continue;
                     if (Date.now() / 1000 - (msg.date || 0) > MAX_MESSAGE_AGE_S) continue;
                     if (target && !target.isDestroyed()) target.send('telegram:command', { text: String(msg.text).slice(0, 200), date: msg.date });
+                    logEvent('info', 'bot', `comando: ${String(msg.text).slice(0, 60)}`);
                 }
-            } catch {
-                // Sin red, PC despertando, clave revocada…: reintentar más tarde
+            } catch (error) {
+                // Sin red, PC despertando, clave revocada…: reintentar más tarde (sin repetir el mismo error en el registro)
+                if (error.message !== lastError) logEvent('warn', 'bot', error.message);
+                lastError = error.message;
                 await new Promise((r) => setTimeout(r, 30000));
             }
         }

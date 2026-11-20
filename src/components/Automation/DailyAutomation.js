@@ -6,6 +6,7 @@ import { checkClauseAlerts } from '../../services/automation/clauseAlerts';
 import { runMatchdayJob, isMatchdaySummaryDue } from '../../services/automation/matchdayJob';
 import { handleBotMessage } from '../../services/automation/botHandler';
 import { runXpBacktest } from '../../services/automation/xpBacktestJob';
+import { logEvent, logError } from '../../services/automation/log';
 
 const CHECK_EVERY_MS = 60 * 1000;
 
@@ -67,7 +68,7 @@ const DailyAutomation = () => {
       if (cfg.isDailyRun && cfg.dailyRunMode === 'alerts') {
         let sent = 0;
         for (let i = 0; i < 25 && !sent && !cancelled; i++) {
-          sent = await checkClauseAlerts().catch(() => 0);
+          sent = await checkClauseAlerts().catch((e) => { logEvent('error', 'avisos', e); return 0; });
           if (!sent) await new Promise((r) => setTimeout(r, 15000));
         }
         if (!cancelled) await ea.dailyRunFinished('ok');
@@ -85,13 +86,13 @@ const DailyAutomation = () => {
 
     const timer = setInterval(() => {
       run('timer');
-      checkClauseAlerts().catch(() => {});
-      runMatchday().catch(() => {});
+      checkClauseAlerts().catch(logError('avisos'));
+      runMatchday().catch(logError('resumen-jornada'));
     }, CHECK_EVERY_MS);
     const unsub = ea?.onRunNow?.((d) => {
       // Cada modo explícito: un modo desconocido nunca lanza el informe (ni el auto-mercado)
       if (d?.mode === 'matchday') runMatchday(true);
-      else if (d?.mode === 'alerts') checkClauseAlerts().catch(() => {});
+      else if (d?.mode === 'alerts') checkClauseAlerts().catch(logError('avisos'));
       else if (d?.mode === 'backtest') {
         const { leagueId: lid, user: u } = ctx.current;
         runXpBacktest({ leagueId: lid, user: u })
@@ -104,9 +105,9 @@ const DailyAutomation = () => {
     const tg = window.electronAPI?.telegram;
     const unsubBot = tg?.onCommand?.((msg) => {
       const { leagueId: lid, user: u } = ctx.current;
-      handleBotMessage(msg, { leagueId: lid, user: u }).catch(() => {});
+      handleBotMessage(msg, { leagueId: lid, user: u }).catch(logError('bot'));
     });
-    tg?.startBot?.().catch(() => {});
+    tg?.startBot?.().then((r) => { if (r && !r.success) logEvent('info', 'bot', r.error); }).catch(logError('bot'));
 
     return () => {
       cancelled = true;
