@@ -1,4 +1,5 @@
-import { forecastPoints, recentForm, bestLineup, HOME_FACTOR } from './forecast';
+import { forecastPoints, recentForm, bestLineup } from './forecast';
+import { teamStrength } from './xpModel';
 
 describe('forecastPoints', () => {
   const pm = {
@@ -17,12 +18,33 @@ describe('forecastPoints', () => {
     expect(recentForm(pm)).toBe(10);
   });
 
-  test('xP combina media, forma, casa y probabilidad', () => {
-    const r = forecastPoints(pm, { playProbability: 0.9, nextIsHome: true, nextRival: 'Celta' });
-    // base = 0.6·6 + 0.4·10 = 7.6
-    expect(r.xp).toBeCloseTo(7.6 * HOME_FACTOR * 0.9);
+  test('xP v2: titularidad de futbolfantasy × puntos por titularidad (sin casa/fuera)', () => {
+    const r = forecastPoints(pm, { playProbability: 0.9, nextIsHome: true, nextRival: 'Celta' }, null);
     expect(r.probSource).toBe('futbolfantasy');
+    expect(r.playProb).toBe(0.9);
     expect(r.nextRival).toBe('Celta');
+    // Sin minutos en lastStats: jugó si puntuó → 4 titularidades; encogida a la media por defecto (5)
+    expect(r.ptsIfStarts).toBeGreaterThan(5);
+    expect(r.ptsIfStarts).toBeLessThan(10);
+    expect(r.xp).toBeGreaterThan(0.9 * r.ptsIfStarts - 1e-9);
+    expect(r.rivalFactor).toBe(1);
+  });
+
+  test('el rival del calendario modifica el xP (contexto de liga)', () => {
+    const cal = { 1: [{ localId: 'R', visitorId: 'X', localScore: 0, visitorScore: 5 }] };
+    const ctx = { priors: { 3: 5 }, strength: teamStrength(cal, 2), fixtures: new Map([['T', { home: true, rivalId: 'R' }]]) };
+    const conTeam = { ...pm, team: { id: 'T' } };
+    const a = forecastPoints(conTeam, { playProbability: 0.9 }, ctx);
+    const b = forecastPoints(conTeam, { playProbability: 0.9 }, { ...ctx, fixtures: new Map() });
+    expect(a.rivalFactor).toBeGreaterThan(1); // R encaja mucho → bueno para un medio
+    expect(a.xp).toBeGreaterThan(b.xp);
+    expect(a.nextIsHome).toBe(true);
+  });
+
+  test('entrenador: media y forma', () => {
+    const r = forecastPoints({ ...pm, positionId: 5 }, null, null);
+    expect(r.xp).toBeCloseTo(0.6 * 6 + 0.4 * 10);
+    expect(r.probSource).toBe('entrenador');
   });
 
   test('lesionado → 0 aunque futbolfantasy diga otra cosa', () => {

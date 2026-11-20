@@ -1,18 +1,32 @@
 /**
  * Previsión de puntos para la próxima jornada y optimizador de alineación.
  *
- * Modelo (simple y explicable):
- *   base   = 60 % media de la temporada + 40 % forma (media de las últimas 3 jornadas)
- *   xP     = base × factor casa/fuera × probabilidad de jugar
- * Probabilidad de jugar: la de futbolfantasy si existe; si no, según estado
- * (ok 0,6 · duda 0,4 · lesión/sanción 0). Funciones puras.
+ * Modelo v2 (validado con un backtest retroactivo sobre las jornadas jugadas,
+ * ver xpModel.js y retroBacktest.js):
+ *   xP = P(titular) × puntos por titularidad + P(sale del banquillo) × puntos como suplente
+ *        × factor rival (fuerza del rival según el calendario, ±15 % como máximo)
+ *  - Puntos por titularidad: media ponderada por recencia de los partidos con ≥ 60',
+ *    encogida hacia la media de su posición si hay pocos partidos.
+ *  - P(titular): la de futbolfantasy si existe; si no, su tasa reciente de titularidades.
+ *  - Casa/fuera: sin efecto (en el backtest no mejoraba la previsión).
+ * Entrenadores: media de temporada y forma (como antes).
+ *
+ * El contexto (medias por posición, fuerza de equipos y próximos partidos) lo
+ * prepara buildXpContext con los datos de la liga; sin contexto se usan valores por defecto.
  */
+import { buildHistory, predictV2, rivalFactor } from './xpModel';
 
-export const HOME_FACTOR = 1.08;
-export const AWAY_FACTOR = 0.93;
 const FALLBACK_PROB = { ok: 0.6, doubtful: 0.4, injured: 0, suspended: 0, not_available: 0 };
+export const RIVAL_WEIGHT = 0.5;
+// Media de puntos por titularidad por posición cuando no hay contexto de liga
+const DEFAULT_PRIORS = { 1: 5, 2: 5, 3: 5, 4: 5 };
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+
+/** Contexto actual del modelo (lo fija el cargador de datos de la liga). */
+let currentContext = null;
+export const setXpContext = (ctx) => { currentContext = ctx; };
+export const getXpContext = () => currentContext;
 
 /** Media de puntos de las últimas `n` jornadas con datos (lastStats/playerStats). */
 export const recentForm = (playerMaster, n = 3) => {
@@ -26,40 +40,55 @@ export const recentForm = (playerMaster, n = 3) => {
 };
 
 /**
- * @param {object} playerMaster  jugador de la API (averagePoints, playerStatus, lastStats…)
+ * @param {object} playerMaster  jugador de la API (playerStats/lastStats, playerStatus…)
  * @param {object|null} trend    entrada de futbolfantasy (playProbability, nextRival, nextIsHome)
+ * @param {object|null} [ctx]    { priors, strength, fixtures: Map(teamId → { home, rivalId }) }
  */
-export const forecastPoints = (playerMaster, trend = null) => {
+export const forecastPoints = (playerMaster, trend = null, ctx = currentContext) => {
   const status = playerMaster?.playerStatus || 'ok';
   const avg = isNum(playerMaster?.averagePoints) ? playerMaster.averagePoints : null;
   const form = recentForm(playerMaster);
-  const base = avg === null ? form : form === null ? avg : 0.6 * avg + 0.4 * form;
+  const fixture = ctx?.fixtures?.get(String(playerMaster?.team?.id ?? '')) || null;
+  const nextIsHome = fixture ? fixture.home : (trend?.nextIsHome ?? null);
+  const common = {
+    form, seasonAvg: avg, venueFactor: 1, nextRival: trend?.nextRival || null, nextIsHome,
+  };
 
-  const isCoach = playerMaster?.positionId === 5;
-  let prob;
-  let probSource;
-  if (isCoach) {
-    prob = 1; probSource = 'entrenador';
-  } else if (status === 'injured' || status === 'suspended' || status === 'not_available') {
-    prob = 0; probSource = 'estado';
-  } else if (isNum(trend?.playProbability)) {
-    prob = trend.playProbability; probSource = 'futbolfantasy';
-  } else {
-    prob = FALLBACK_PROB[status] ?? 0.5; probSource = 'estimada';
+  // Entrenadores: puntúan por el resultado del equipo → media y forma
+  if (playerMaster?.positionId === 5) {
+    const base = avg === null ? form : form === null ? avg : 0.6 * avg + 0.4 * form;
+    return { ...common, xp: isNum(base) ? Math.max(0, base) : null, playProb: 1, probSource: 'entrenador' };
   }
 
-  const venue = trend?.nextIsHome === true ? HOME_FACTOR : trend?.nextIsHome === false ? AWAY_FACTOR : 1;
-  const xp = isNum(base) ? Math.max(0, base) * venue * prob : null;
+  const history = buildHistory(playerMaster);
+  const blocked = ['injured', 'suspended', 'not_available'].includes(status);
+  const ffProb = isNum(trend?.playProbability) ? trend.playProbability : null;
+  let pStart = blocked ? 0 : ffProb;
+  let probSource = blocked ? 'estado' : ffProb !== null ? 'futbolfantasy' : 'historial';
+  if (pStart === null && !history.length) { pStart = FALLBACK_PROB[status] ?? 0.5; probSource = 'estimada'; }
 
+  const rival = fixture
+    ? rivalFactor({ positionId: playerMaster?.positionId, rivalId: fixture.rivalId, strength: ctx?.strength, weight: RIVAL_WEIGHT })
+    : 1;
+  const p = predictV2({
+    history,
+    positionId: playerMaster?.positionId,
+    beforeWeek: Infinity,
+    priors: ctx?.priors || DEFAULT_PRIORS,
+    pStart,
+    status,
+    rival,
+  });
+  // Sin historia ni minutos: la media de la API como respaldo
+  const xp = history.length ? p.xp : (isNum(avg) ? Math.max(0, avg) * (pStart ?? 0.5) : null);
   return {
+    ...common,
     xp,
-    playProb: prob,
+    playProb: p.pStart ?? pStart,
+    subProb: p.pSub,
+    ptsIfStarts: p.ptsStart,
+    rivalFactor: rival,
     probSource,
-    form,
-    seasonAvg: avg,
-    venueFactor: venue,
-    nextRival: trend?.nextRival || null,
-    nextIsHome: trend?.nextIsHome ?? null,
   };
 };
 

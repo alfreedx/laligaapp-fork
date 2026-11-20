@@ -97,6 +97,20 @@ Cada informe llega como mensaje (cifras clave y *Qué hacer*) con el PDF adjunto
   **"LaLigaFantasy - Avisos de cláusula"** (un disparador por aviso, despierta el equipo y abre la app
   con `--daily-run --alerts` 3 min antes). La alarma del calendario del móvil no depende del PC.
 
+## Previsión de puntos (xP)
+
+`xP = P(titular) × puntos por titularidad + P(sale del banquillo) × puntos como suplente`, ajustado
+por la fuerza del rival (±15 % como máximo). Detalles en `src/services/analytics/xpModel.js`.
+
+Para comprobar el modelo con las jornadas ya jugadas (solo lectura, la app se cierra al terminar):
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\LaLigaFantasyFork\LaLiga Fantasy App.exe" --daily-run --backtest
+```
+
+El resultado se guarda en `%APPDATA%\laliga-fantasy-app\fantasy-data\xp-backtest.json`: error medio,
+correlación por posición, puntos perdidos por el once frente al óptimo y su intervalo de confianza.
+
 ## Avisos de cláusulas
 
 Con la app abierta (aunque esté minimizada), se envía una notificación (y un Telegram) **2 minutos antes** de que se abra la

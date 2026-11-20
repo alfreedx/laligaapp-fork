@@ -11,7 +11,8 @@
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
 export const GOOD_OFFER_PREMIUM = 0.05;
-export const LOW_XP = 3; // puntos esperados por debajo de esto = mala jornada prevista
+// Mala jornada prevista: xP por debajo de la mitad del titular medio de su posición
+export const LOW_XP_SHARE = 0.5;
 export const LOW_PLAY_PROB = 0.5;
 
 /**
@@ -20,7 +21,7 @@ export const LOW_PLAY_PROB = 0.5;
  * @param {Set<string>} ctx.starterIds ids de los titulares del once recomendado
  * @param {string|null} ctx.coachId    entrenador recomendado
  */
-export const classifyOffers = (offers, { starterIds = new Set(), coachId = null, minPremium = GOOD_OFFER_PREMIUM } = {}) =>
+export const classifyOffers = (offers, { starterIds = new Set(), coachId = null, minPremium = GOOD_OFFER_PREMIUM, starterXpByPos = {} } = {}) =>
   (offers || []).map((o) => {
     const { r } = o;
     const premium = isNum(o.money) && isNum(r.value) && r.value > 0 ? o.money / r.value - 1 : null;
@@ -35,7 +36,8 @@ export const classifyOffers = (offers, { starterIds = new Set(), coachId = null,
         reasons.push(`${Math.round(r.playProb * 100)} % de jugar`);
       }
       if (!starterIds.has(String(r.id))) reasons.push('no está en tu once');
-      if (isNum(r.xp) && r.xp < LOW_XP) reasons.push(`mala jornada prevista (xP ${r.xp.toFixed(1).replace('.', ',')})`);
+      const ref = isNum(starterXpByPos[r.positionId]) ? starterXpByPos[r.positionId] : 6;
+      if (isNum(r.xp) && r.xp < LOW_XP_SHARE * ref) reasons.push(`mala jornada prevista (xP ${r.xp.toFixed(1).replace('.', ',')})`);
     }
     let level = null;
     if (good) level = reasons.length ? 'fuerte' : 'oportunidad';

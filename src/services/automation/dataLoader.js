@@ -10,6 +10,8 @@ import { extractTeamPlayers } from '../../utils/fetchAllTeamsData';
 import { fetchAllActivity } from '../../hooks/useLeagueAnalytics';
 import { buildLedger } from '../analytics/ledger';
 import { firstKickoff, resolveMatchday } from '../analytics/matchday';
+import { buildXpContext } from '../analytics/xpModel';
+import { setXpContext } from '../analytics/forecast';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -155,6 +157,34 @@ export const loadLeagueData = async ({ leagueId, user }) => {
   const weekInfo = weekRes?.data || null; // { weekNumber, openingWeekDate, closingWeekDate, isLive }
   const week = weekInfo?.weekNumber ?? null;
   const matchday = await fetchMatchday(weekInfo);
+  const market = extractArray(marketRes);
+
+  // Modelo de xP: historial completo de cada jugador (minutos por jornada), calendario con
+  // resultados (fuerza de los equipos) y próximo partido de cada equipo
+  const calendarByWeek = {};
+  for (let w = 1; matchday?.week && w <= matchday.week; w++) {
+    try {
+      const res = await fantasyAPI.getMatchday(w);
+      calendarByWeek[w] = extractArray(res?.data ?? res);
+    } catch { /* jornada sin datos */ }
+    await sleep(120);
+  }
+  const masters = [
+    ...teams.flatMap((t) => t.players.map((p) => p.playerMaster)),
+    ...market.map((m) => m.playerMaster),
+  ].filter((pm) => pm?.id);
+  for (const pm of masters) {
+    if (pm.playerStats?.length) continue;
+    try {
+      const res = await fantasyAPI.getPlayerDetails(pm.id, leagueId);
+      const d = res?.data ?? res;
+      const stats = (d?.playerMaster || d)?.playerStats;
+      if (Array.isArray(stats)) pm.playerStats = stats;
+    } catch { /* se usa lastStats */ }
+    await sleep(120);
+  }
+  const xpContext = buildXpContext({ playerMasters: masters, calendarByWeek, nextWeek: matchday?.week });
+  setXpContext(xpContext);
   const ownerByPlayer = new Map();
   teams.forEach((t) => t.players.forEach((p) => ownerByPlayer.set(String(p.playerMaster?.id), t)));
 
@@ -165,7 +195,7 @@ export const loadLeagueData = async ({ leagueId, user }) => {
     myMoney: readTeamMoney(moneyRes) ?? null,
     teams,
     standings,
-    market: extractArray(marketRes),
+    market,
     activity,
     ledger: buildLedger(activity),
     ownerByPlayer,
@@ -180,6 +210,42 @@ export const loadLeagueData = async ({ leagueId, user }) => {
     week,
     weekInfo,
     matchday, // { week, kickoff, started } → próximo primer partido
+    xpContext,
     loadedAt: new Date().toISOString(),
   };
+};
+
+/**
+ * Datos para el backtest retroactivo del xP (solo lectura): plantillas, historial
+ * completo de cada jugador (detalle del jugador) y calendario con resultados.
+ */
+export const loadBacktestData = async ({ leagueId, user, onProgress = () => {} }) => {
+  const { myTeamId, standings } = await initLeague({ leagueId, user });
+  const teams = await fetchTeams(leagueId, standings);
+  const weekRes = await fantasyAPI.getCurrentWeek().catch(() => null);
+  const weekInfo = weekRes?.data || null;
+  const week = weekInfo?.weekNumber ?? null;
+
+  const calendarByWeek = {};
+  for (let w = 1; week && w <= week; w++) {
+    try {
+      const res = await fantasyAPI.getMatchday(w);
+      calendarByWeek[w] = extractArray(res?.data ?? res);
+    } catch { /* jornada sin datos */ }
+    await sleep(150);
+  }
+
+  const details = new Map();
+  const all = teams.flatMap((t) => t.players.map((p) => p.playerMaster).filter(Boolean));
+  for (let i = 0; i < all.length; i++) {
+    const pm = all[i];
+    try {
+      const res = await fantasyAPI.getPlayerDetails(pm.id, leagueId);
+      const d = res?.data ?? res;
+      details.set(String(pm.id), d?.playerMaster || d);
+    } catch { /* sin detalle: se usa lastStats */ }
+    onProgress(i + 1, all.length);
+    await sleep(150);
+  }
+  return { myTeamId, teams, calendarByWeek, week, weekInfo, details };
 };

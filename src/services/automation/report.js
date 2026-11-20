@@ -106,7 +106,12 @@ export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leag
   const benchByLine = [1, 2, 3, 4].map((pos) => lineup.bench.find((p) => p.positionId === pos)).filter(Boolean);
   const doubtful = lineup.starters.filter((p) => p.playProb < 0.6);
   // Oferta buena = ≥ 5 % sobre el valor. Fuerte si además hay motivo deportivo para vender.
-  const classified = classifyOffers(offers, { starterIds: new Set(lineup.starters.map((p) => String(p.id))), coachId: lineup.coach?.id ?? null })
+  const starterXpByPos = {};
+  [1, 2, 3, 4].forEach((pos) => {
+    const xs = lineup.starters.filter((p) => p.positionId === pos && isNum(p.xp)).map((p) => p.xp);
+    if (xs.length) starterXpByPos[pos] = xs.reduce((a, b) => a + b, 0) / xs.length;
+  });
+  const classified = classifyOffers(offers, { starterIds: new Set(lineup.starters.map((p) => String(p.id))), coachId: lineup.coach?.id ?? null, starterXpByPos })
     .sort((a, b) => (b.premium ?? -Infinity) - (a.premium ?? -Infinity));
   const goodOffers = classified.filter((o) => o.good);
   const strongSells = goodOffers.filter((o) => o.level === 'fuerte');
@@ -406,6 +411,8 @@ export const buildSnapshot = (data) => ({
     players: t.players.map((p) => ({
       id: String(p.playerMaster?.id), value: p.playerMaster?.marketValue, points: p.playerMaster?.points,
       clause: p.buyoutClause, clauseLockedUntil: p.buyoutClauseLockedEndTime, shielded: !!p.isShielded,
+      // Probabilidad de jugar de futbolfantasy de ese día: permitirá validar esa parte del xP más adelante
+      prob: data.trendById?.(p.playerMaster?.id)?.playProbability ?? null,
     })),
   })),
   market: data.market.map((m) => ({ id: String(m.playerMaster?.id), price: m.salePrice, value: m.playerMaster?.marketValue, expiration: m.expirationDate })),

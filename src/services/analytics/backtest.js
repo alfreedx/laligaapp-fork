@@ -8,7 +8,7 @@
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
 export const VARIANTS = {
-  modelo: 'Modelo (60 % media + 40 % forma)',
+  modelo: 'Modelo v2 (titular/suplente + rival)',
   media: 'Solo media de temporada',
   forma: 'Solo forma (3 jornadas)',
 };

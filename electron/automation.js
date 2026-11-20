@@ -13,6 +13,7 @@ const SAFE_NAME = /^[A-Za-z0-9._-]{1,80}$/;
 const DAILY_RUN_FLAG = '--daily-run';
 const MATCHDAY_FLAG = '--matchday'; // con --daily-run: solo el resumen de inicio de jornada
 const ALERTS_FLAG = '--alerts';     // con --daily-run: solo los avisos de cláusula
+const BACKTEST_FLAG = '--backtest'; // con --daily-run: backtest del xP (solo lectura)
 const MATCHDAY_TASK = 'LaLigaFantasy - Inicio de jornada';
 const REMINDERS_TASK = 'LaLigaFantasy - Avisos de cláusula';
 const DAILY_RUN_TIMEOUT_MS = 10 * 60 * 1000;
@@ -22,6 +23,7 @@ const isDailyRun = (argv = process.argv) => argv.includes(DAILY_RUN_FLAG);
 const runMode = (argv = process.argv) => {
     if (argv.includes(MATCHDAY_FLAG)) return 'matchday';
     if (argv.includes(ALERTS_FLAG)) return 'alerts';
+    if (argv.includes(BACKTEST_FLAG)) return 'backtest';
     return 'report';
 };
 

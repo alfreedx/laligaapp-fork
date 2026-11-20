@@ -41,6 +41,16 @@ a **LaLigaApp 3.5.7** de Externoak y cuándo. Para el historial del proyecto ori
   aviso 2 min antes y evento de calendario con alarma para el móvil), `/avisos` y `/ayuda`. Solo
   atiende al chat configurado y solo lee datos.
 - Informe: oportunidades separadas en **mercado de LaLiga** y **cláusulas de otros managers**.
+- **xP v2** (método acordado con un "consejo" de revisión y validado con un backtest retroactivo
+  sin fuga de datos sobre J4–J12): P(titular) × puntos por titularidad (≥ 60', media ponderada por
+  recencia y encogida a la media de su posición) + P(suplente) × puntos de banquillo, × factor
+  rival según el calendario (±15 %). Casa/fuera eliminado (no mejoraba). Backtest: MAE 2,88 → 2,78,
+  Spearman por posición 0,376 → 0,398, puntos perdidos por el once frente al óptimo 13,5 → 13,1 por
+  jornada (mejora pequeña, dentro del ruido estadístico de 9 jornadas).
+- Backtest retroactivo del xP (`--daily-run --backtest`, solo lectura): MAE, Spearman, *regret*
+  del once e intervalo bootstrap. Se guarda cada día la probabilidad de jugar de futbolfantasy
+  en la captura local para poder validarla en el futuro.
+- Ofertas: "mala jornada prevista" pasa a ser relativa a su posición (< 50 % del titular medio).
 
 ### Cambiado
 - Rentabilidad → *Mercado hoy*: solo los jugadores que pone LaLiga (sin los de otros managers).

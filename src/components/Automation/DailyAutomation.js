@@ -5,6 +5,7 @@ import { loadSettings, loadState } from '../../services/automation/localStore';
 import { checkClauseAlerts } from '../../services/automation/clauseAlerts';
 import { runMatchdayJob, isMatchdaySummaryDue } from '../../services/automation/matchdayJob';
 import { handleBotMessage } from '../../services/automation/botHandler';
+import { runXpBacktest } from '../../services/automation/xpBacktestJob';
 
 const CHECK_EVERY_MS = 60 * 1000;
 
@@ -48,6 +49,20 @@ const DailyAutomation = () => {
 
     (async () => {
       const cfg = ea ? await ea.getConfig() : {};
+      // Backtest del xP (solo lectura): calcula, guarda xp-backtest.json y cierra
+      if (cfg.isDailyRun && cfg.dailyRunMode === 'backtest') {
+        const { leagueId: lid, user: u } = ctx.current;
+        let ok = false;
+        try {
+          const r = await runXpBacktest({ leagueId: lid, user: u });
+          ok = true;
+          await ea.notify('Backtest del xP terminado', `${r.weeks.length} jornadas evaluadas`);
+        } catch (e) {
+          await ea.notify('Backtest del xP: error', e.message);
+        }
+        if (!cancelled) await ea.dailyRunFinished(ok ? 'ok' : 'error');
+        return;
+      }
       // Abierta por un aviso de /clausula: esperar a que toque (≤ 5 min), avisar y cerrar
       if (cfg.isDailyRun && cfg.dailyRunMode === 'alerts') {
         let sent = 0;
@@ -74,9 +89,15 @@ const DailyAutomation = () => {
       runMatchday().catch(() => {});
     }, CHECK_EVERY_MS);
     const unsub = ea?.onRunNow?.((d) => {
+      // Cada modo explícito: un modo desconocido nunca lanza el informe (ni el auto-mercado)
       if (d?.mode === 'matchday') runMatchday(true);
       else if (d?.mode === 'alerts') checkClauseAlerts().catch(() => {});
-      else run('scheduler', true);
+      else if (d?.mode === 'backtest') {
+        const { leagueId: lid, user: u } = ctx.current;
+        runXpBacktest({ leagueId: lid, user: u })
+          .then((r) => ea.notify('Backtest del xP terminado', `${r.weeks.length} jornadas evaluadas`))
+          .catch((e) => ea.notify('Backtest del xP: error', e.message));
+      } else if (!d?.mode || d.mode === 'report') run('scheduler', true);
     });
 
     // Bot de Telegram: comandos como /clausula (solo del chat configurado)
