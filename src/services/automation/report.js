@@ -91,9 +91,14 @@ export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leag
     // La puja habitual para ganarlo ya no deja beneficio
     bidTooHigh: r.origin === 'Mercado' && isNum(r.bid) && isNum(r.maxBid) && r.bid > r.maxBid,
   }));
-  const econ = candidates.filter((r) => isNum(r.gainNLaLiga) && r.gainNLaLiga >= 500_000).sort((a, b) => b.gainNLaLiga - a.gainNLaLiga).slice(0, 6);
+  // Separadas por origen: mercado de LaLiga y cláusulas de otros managers (top 5 de cada)
+  const isMarket = (r) => r.origin === 'Mercado';
+  const econPool = candidates.filter((r) => isNum(r.gainNLaLiga) && r.gainNLaLiga >= 500_000).sort((a, b) => b.gainNLaLiga - a.gainNLaLiga);
+  const econMarket = econPool.filter(isMarket).slice(0, 5);
+  const econClause = econPool.filter((r) => !isMarket(r)).slice(0, 5);
+  const econ = [...econMarket, ...econClause].sort((a, b) => b.gainNLaLiga - a.gainNLaLiga);
   // Se ordena de nuevo más abajo, cuando se sabe a quién mejora cada uno
-  const sport = candidates.filter((r) => r.status === 'ok' && r.positionId !== 5 && isNum(r.xp)).sort((a, b) => b.xp - a.xp).slice(0, 12);
+  const sport = candidates.filter((r) => r.status === 'ok' && r.positionId !== 5 && isNum(r.xp)).sort((a, b) => b.xp - a.xp);
   const clauseSoon = candidates.filter((r) => r.origin === 'Cláusula' && !r.clauseIsOpen).sort((a, b) => new Date(a.clauseOpenAt) - new Date(b.clauseOpenAt));
 
   // Once recomendado, banquillo (mejor suplente por línea) y fichajes que lo mejoran
@@ -119,7 +124,9 @@ export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leag
   });
   // Deportivas: primero las que mejoran tu once (por puntos ganados), luego el resto por xP
   sport.sort((a, b) => ((b.improves?.delta ?? -1) - (a.improves?.delta ?? -1)) || (b.xp - a.xp));
-  sport.splice(6);
+  const sportMarket = sport.filter(isMarket).slice(0, 5);
+  const sportClause = sport.filter((r) => !isMarket(r)).slice(0, 5);
+  sport.splice(0, sport.length, ...sportMarket, ...sportClause);
   // Solo fichajes realistas: con tu saldo, o con tu saldo + aceptar las ofertas que te dan ganancia
   const cash = isNum(data.myMoney) ? Math.max(0, data.myMoney) : 0;
   const cashWithOffers = cash + goodOffers.reduce((s, o) => s + o.money, 0);
@@ -195,6 +202,7 @@ export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leag
     offers: classified, goodOffers, strongSells, offerOpportunities, goodOfferPremium: GOOD_OFFER_PREMIUM,
     mustProtect, acceptable,
     econ, sport, clauseSoon, upgrades,
+    econMarket, econClause, sportMarket, sportClause,
     squad: [...squad].sort((a, b) => (a.positionId - b.positionId) || (b.value - a.value)),
     rivalsTable, bidOverall: bidStats.overall,
     accuracy,
@@ -265,23 +273,29 @@ export const renderMarkdown = (m) => {
     md.push('');
   }
 
-  md.push(`## 💰 Oportunidades económicas (vender a LaLiga en ${m.days} días)`);
-  md.push('_En mercado, la ganancia ya descuenta la sobrepuja típica de la liga._');
-  md.push(m.econ.length ? table(['Jugador', 'Origen', 'Precio', 'Puja máx. rentable', `Gana en ${m.days}d`, 'Rentab.', 'Tendencia/día', 'Disponible'],
-    m.econ.map((r) => [`${r.name} (${r.position})`, r.origin === 'Mercado' ? 'Mercado' : `Cláusula ${r.from}`, `${M(r.price)}${r.bid ? ` · puja ~${M(r.bid)}` : ''}`, `${M(r.maxBid)}${r.bidTooHigh ? ' ⚠️' : ''}`, SM(r.gainNLaLiga), PCT(r.roiN), `${trendArrow(r.growthAvg3)} ${K(r.growthAvg3)}${isNum(r.growthAvg3Pct) ? ` (${PCT2(r.growthAvg3Pct)})` : ''}`, r.available]))
+  const econMd = (rows, clause) => (rows.length ? table(['Jugador', clause ? 'Dueño' : 'Precio', clause ? 'Cláusula' : 'Puja', 'Puja máx. rentable', `Gana en ${m.days}d`, 'Rentab.', 'Tendencia/día', 'Disponible'],
+    rows.map((r) => [`${r.name} (${r.position})`, clause ? r.from : M(r.price), clause ? M(r.price) : (r.bid ? `~${M(r.bid)}` : '—'), `${M(r.maxBid)}${r.bidTooHigh ? ' ⚠️' : ''}`, SM(r.gainNLaLiga), PCT(r.roiN), `${trendArrow(r.growthAvg3)} ${K(r.growthAvg3)}${isNum(r.growthAvg3Pct) ? ` (${PCT2(r.growthAvg3Pct)})` : ''}`, r.available]))
     : 'Ninguna con ganancia esperada.');
-  md.push(`_Puja máx. rentable = lo máximo que puedes pagar sin perder dinero vendiéndolo a LaLiga en ${m.days} días. ⚠️ = la puja habitual de tu liga ya la supera._`);
-  md.push('');
-
-  md.push(`## ⚽ Oportunidades deportivas (más puntos esperados · comparado con tu alineación ${m.usingSaved ? 'actual' : 'recomendada'})`);
-  md.push(m.sport.length ? table(['Jugador', 'Origen', 'Precio', 'xP', 'Mejora a', 'Próximo (juega)', 'Puja máx. rentable', `Rentab. ${m.days}d`, 'Disponible'],
-    m.sport.map((r) => [
-      `${r.name} (${r.position})`, r.origin === 'Mercado' ? 'Mercado' : `Cláusula ${r.from}`, M(r.price), N(r.xp),
+  const sportMd = (rows, clause) => (rows.length ? table(['Jugador', clause ? 'Dueño' : 'Origen', 'Precio', 'xP', 'Mejora a', 'Próximo (juega)', 'Puja máx. rentable', `Rentab. ${m.days}d`, 'Disponible'],
+    rows.map((r) => [
+      `${r.name} (${r.position})`, clause ? r.from : 'LaLiga', M(r.price), N(r.xp),
       r.improves ? `${r.improves.name} (+${N(r.improves.delta)})` : 'no mejora',
       `${r.nextRival ? `${venue(r)} ${r.nextRival} ` : ''}(${Math.round((r.playProb ?? 0) * 100)} %)`,
       M(r.maxBid), PCT(r.roiN), r.available,
     ]))
     : '—');
+  md.push('## 🏪 Oportunidades en el mercado de LaLiga');
+  md.push(`### 💰 Económicas (vender a LaLiga en ${m.days} días; ya descuenta la sobrepuja típica de la liga)`);
+  md.push(econMd(m.econMarket, false));
+  md.push(`### ⚽ Deportivas (comparado con tu alineación ${m.usingSaved ? 'actual' : 'recomendada'})`);
+  md.push(sportMd(m.sportMarket, false));
+  md.push('');
+  md.push('## 🔓 Oportunidades de otros managers (cláusulas abiertas o que se abren en 48 h)');
+  md.push(`### 💰 Económicas (vender a LaLiga en ${m.days} días)`);
+  md.push(econMd(m.econClause, true));
+  md.push('### ⚽ Deportivas');
+  md.push(sportMd(m.sportClause, true));
+  md.push(`_Puja máx. rentable = lo máximo que puedes pagar sin perder dinero vendiéndolo a LaLiga en ${m.days} días. ⚠️ = la puja habitual de tu liga ya la supera._`);
   md.push('');
 
   if (m.clauseSoon.length) {

@@ -43,7 +43,7 @@ const TelegramSettings = ({ settings, update }) => {
     setBusy(true);
     const r = await tg.detectChat();
     setBusy(false);
-    if (r.success) { toast.success(`Chat detectado: ${r.chatName}`); update({ telegramEnabled: true }); refresh(); } else toast.error(r.error, { duration: 8000 });
+    if (r.success) { toast.success(`Chat detectado: ${r.chatName}`); update({ telegramEnabled: true }); refresh(); tg.startBot?.(); } else toast.error(r.error, { duration: 8000 });
   };
   const test = async (withPdf) => {
     setBusy(true);
@@ -110,6 +110,14 @@ const TelegramSettings = ({ settings, update }) => {
         <Toggle disabled={!ready || !settings.telegramEnabled} checked={settings.matchdaySummaryEnabled !== false} onChange={(v) => update({ matchdaySummaryEnabled: v })}
           label="Resumen al empezar la jornada" hint="1 h antes del primer partido: puntos previstos de tu alineación guardada, dudas y cambios sugeridos. La app lo programa sola (despierta el portátil)." />
       </div>
+      {ready && (
+        <div className="text-sm rounded-lg bg-sky-50 dark:bg-sky-900/20 p-3 space-y-1">
+          <div className="font-medium">🤖 Comandos del bot</div>
+          <div><code>/clausula nombre</code>: cuándo se abre la cláusula de cualquier jugador de la liga, precio y si te llega. Te avisa 2 min antes y te manda un evento con alarma para el calendario del móvil.</div>
+          <div><code>/avisos</code>: avisos pendientes · <code>/ayuda</code></div>
+          <div className="text-xs text-gray-500">Solo responde a tu chat y mientras la app esté abierta en el PC (si estaba dormido, al despertarse).</div>
+        </div>
+      )}
       <p className="text-xs text-gray-500">
         Los mensajes los envía tu PC: llegan si a esa hora está encendido o en suspensión (la tarea programada lo despierta). La clave del bot se guarda cifrada con tu usuario de Windows y no sale de este equipo salvo hacia api.telegram.org.
       </p>

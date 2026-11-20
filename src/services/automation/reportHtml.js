@@ -13,9 +13,6 @@ const esc = (s) => String(s ?? '')
 const rich = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
 const signCls = (v) => (!isNum(v) ? 'muted' : v > 0 ? 'pos' : v < 0 ? 'neg' : '');
 const trendHtml = (v, pct = null) => (isNum(v) ? `<span class="${v > 20_000 ? 'pos' : v < -20_000 ? 'neg' : 'muted'}">${trendArrow(v)} ${K(v)}${isNum(pct) ? `<br><span class="small">${PCT2(pct)}</span>` : ''}</span>` : '<span class="muted">—</span>');
-const origin = (r) => (r.origin === 'Mercado'
-  ? '<span class="pill pill-m">Mercado</span>'
-  : `<span class="pill pill-c">Cláusula</span> <span class="small">${esc(r.from)}</span>`);
 const pos = (r) => `<span class="pos-tag p${r.positionId}">${esc(r.position)}</span>`;
 
 const table = (headers, rows, cls = '') => `
@@ -73,6 +70,7 @@ const CSS = `
   .pos-tag { display: inline-block; min-width: 28px; text-align: center; border-radius: 4px; font-size: 7.5pt; font-weight: 700; color: #fff; padding: 0 3px; margin-right: 4px; }
   .p1 { background: #f59e0b; } .p2 { background: #2563eb; } .p3 { background: #059669; } .p4 { background: #dc2626; } .p5 { background: #6b7280; }
   .note { font-size: 8pt; color: #6b7280; margin: 4px 0 0; }
+  h3 { font-size: 10.5pt; margin: 8px 0 4px; color: #374151; }
   .callout { background: #f3f4f6; border-radius: 7px; padding: 6px 9px; font-size: 9pt; margin-bottom: 6px; }
   footer { margin-top: 14px; font-size: 7.8pt; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 5px; }
 `;
@@ -144,30 +142,36 @@ export const renderReportHtml = (m) => {
       m.acceptable.length ? `Expuestos pero asumibles (suplentes; no pierdes dinero si te los clausulan): ${esc(m.acceptable.map((p) => p.name).join(', '))}.` : ''));
   }
 
-  // Oportunidades
-  parts.push(section(`💰 Oportunidades económicas · vender a LaLiga en ${m.days} días`,
-    m.econ.length ? table(['Jugador', 'Origen', 'Precio', 'Puja máx. rentable', `Gana en ${m.days}d`, 'Rentab.', 'Tendencia', 'Disponible'],
-      m.econ.map((r) => [
-        `${pos(r)}${esc(r.name)}`, origin(r),
-        `${esc(M(r.price))}${r.bid ? `<div class="small">puja ~${esc(M(r.bid))}</div>` : ''}`,
+  // Oportunidades, separadas: mercado de LaLiga / cláusulas de otros managers
+  const econTable = (rows, clause) => (rows.length
+    ? table(['Jugador', clause ? 'Dueño' : 'Precio', 'Puja máx. rentable', `Gana en ${m.days}d`, 'Rentab.', 'Tendencia', 'Disponible'],
+      rows.map((r) => [
+        `${pos(r)}${esc(r.name)}`,
+        clause ? `${esc(r.from)}<div class="small">cláusula ${esc(M(r.price))}</div>` : `${esc(M(r.price))}${r.bid ? `<div class="small">puja ~${esc(M(r.bid))}</div>` : ''}`,
         `<b>${esc(M(r.maxBid))}</b>${r.bidTooHigh ? '<div class="small neg">la puja habitual la supera</div>' : ''}`,
         `<span class="${signCls(r.gainNLaLiga)}">${esc(SM(r.gainNLaLiga))}</span>`,
         `<span class="${signCls(r.roiN)}">${esc(PCT(r.roiN))}</span>`,
         trendHtml(r.growthAvg3, r.growthAvg3Pct), esc(r.available),
       ]))
-      : '<p class="small">Hoy no hay ninguna con ganancia esperada.</p>',
-    m.econ.length ? `<b>Puja máx. rentable</b>: lo máximo que puedes pagar sin perder dinero si lo vendes a LaLiga en ${m.days} días. En mercado, la ganancia ya descuenta la sobrepuja típica de tu liga.` : ''));
-
-  parts.push(section(`⚽ Oportunidades deportivas · frente a tu alineación ${m.usingSaved ? 'actual' : 'recomendada'}`,
-    m.sport.length ? table(['Jugador', 'Origen', 'Precio', 'xP', 'Mejora a', 'Próximo (juega)', 'Puja máx. rentable', `Rentab. ${m.days}d`, 'Disponible'],
-      m.sport.map((r) => [
-        `${pos(r)}${esc(r.name)}`, origin(r), esc(M(r.price)), `<b>${esc(N(r.xp))}</b>`,
+    : '<p class="small">Ninguna con ganancia esperada.</p>');
+  const sportTable = (rows, clause) => (rows.length
+    ? table(['Jugador', clause ? 'Dueño' : 'Precio', 'xP', 'Mejora a', 'Próximo (juega)', 'Puja máx. rentable', `Rentab. ${m.days}d`, 'Disponible'],
+      rows.map((r) => [
+        `${pos(r)}${esc(r.name)}`, clause ? `${esc(r.from)}<div class="small">${esc(M(r.price))}</div>` : esc(M(r.price)), `<b>${esc(N(r.xp))}</b>`,
         r.improves ? `${esc(r.improves.name)} <span class="pos">+${esc(N(r.improves.delta))}</span>` : '<span class="muted">no mejora</span>',
         `${r.nextRival ? `${venueIcon(r)} ${esc(r.nextRival)} ` : ''}<span class="small">${esc(Math.round((r.playProb ?? 0) * 100))} %</span>`,
         esc(M(r.maxBid)), `<span class="${signCls(r.roiN)}">${esc(PCT(r.roiN))}</span>`, esc(r.available),
       ]), 'compact')
-      : '<p class="small">—</p>',
-    m.sport.length ? '"Mejora a" = el titular más flojo de esa posición en tu alineación y cuántos puntos por jornada ganarías.' : ''));
+    : '<p class="small">Ninguna mejora tu alineación ni destaca en puntos.</p>');
+  const sub = (t) => `<h3>${t}</h3>`;
+  parts.push(section('🏪 Oportunidades en el mercado de LaLiga',
+    `${sub(`💰 Económicas · vender a LaLiga en ${m.days} días`)}${econTable(m.econMarket, false)}
+     ${sub(`⚽ Deportivas · frente a tu alineación ${m.usingSaved ? 'actual' : 'recomendada'}`)}${sportTable(m.sportMarket, false)}`,
+    `<b>Puja máx. rentable</b>: lo máximo que puedes pagar sin perder dinero si lo vendes a LaLiga en ${m.days} días. La ganancia ya descuenta la sobrepuja típica de tu liga.`));
+  parts.push(section('🔓 Oportunidades de otros managers · cláusulas',
+    `${sub(`💰 Económicas · vender a LaLiga en ${m.days} días`)}${econTable(m.econClause, true)}
+     ${sub('⚽ Deportivas')}${sportTable(m.sportClause, true)}`,
+    'Cláusulas abiertas o que se abren en 48 h (contando el bloqueo de 24 h antes del primer partido). "Mejora a" = el titular más flojo de esa posición en tu alineación.'));
 
   if (m.clauseSoon.length) {
     parts.push(section('🔓 Cláusulas que se abren en 48 h', table(['Se abre', 'Jugador', 'Dueño', 'Cláusula', `Gana en ${m.days}d`, 'xP'],

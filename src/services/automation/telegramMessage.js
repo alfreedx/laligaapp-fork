@@ -37,7 +37,7 @@ export const buildTelegramClauseAlert = (w, minutesLeft = 0) => {
   const head = minutesLeft > 0
     ? `⏰ <b>Cláusula en ${minutesLeft} min: ${tgEscape(w.name)}</b>`
     : `🔓 <b>Cláusula abierta: ${tgEscape(w.name)}</b>`;
-  return `${head}\nDe ${tgEscape(w.owner)} · ${parts.join(' · ')}`;
+  return `${head}\n${w.owner ? `De ${tgEscape(w.owner)}` : 'Es tuyo'} · ${parts.join(' · ')}`;
 };
 
 export const buildTelegramError = (message) => `⚠️ <b>Informe Fantasy: error</b>\n${tgEscape(message)}\nAbre la app en el PC para revisarlo.`;

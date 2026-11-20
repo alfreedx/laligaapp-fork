@@ -12,34 +12,43 @@ const CONFIG_FILE = () => path.join(app.getPath('userData'), 'fantasy-automation
 const SAFE_NAME = /^[A-Za-z0-9._-]{1,80}$/;
 const DAILY_RUN_FLAG = '--daily-run';
 const MATCHDAY_FLAG = '--matchday'; // con --daily-run: solo el resumen de inicio de jornada
+const ALERTS_FLAG = '--alerts';     // con --daily-run: solo los avisos de cláusula
 const MATCHDAY_TASK = 'LaLigaFantasy - Inicio de jornada';
+const REMINDERS_TASK = 'LaLigaFantasy - Avisos de cláusula';
 const DAILY_RUN_TIMEOUT_MS = 10 * 60 * 1000;
 const PDF_PARTITION = 'pdf-render'; // sin "persist:" → sesión en memoria, aislada
 
 const isDailyRun = (argv = process.argv) => argv.includes(DAILY_RUN_FLAG);
-const runMode = (argv = process.argv) => (argv.includes(MATCHDAY_FLAG) ? 'matchday' : 'report');
+const runMode = (argv = process.argv) => {
+    if (argv.includes(MATCHDAY_FLAG)) return 'matchday';
+    if (argv.includes(ALERTS_FLAG)) return 'alerts';
+    return 'report';
+};
 
 /**
- * Crea (o sustituye) una tarea de Windows de un solo uso que abre la app con
- * `--daily-run --matchday` a la hora indicada y despierta el equipo.
+ * Crea (o sustituye) una tarea de Windows con disparadores de un solo uso que
+ * abre la app con `--daily-run <modo>` y despierta el equipo. Sin horas, la elimina.
  * Los valores van por variables de entorno: nunca se interpolan en el script.
  */
-const scheduleMatchdayTask = (when) => new Promise((resolve) => {
+const scheduleOnceTask = (taskName, mode, whens) => new Promise((resolve) => {
     if (process.platform !== 'win32') return resolve({ success: false, error: 'Solo disponible en Windows' });
     if (!app.isPackaged) return resolve({ success: false, error: 'Solo en la app instalada (no en modo desarrollo)' });
     const p = (n) => String(n).padStart(2, '0');
-    const local = `${when.getFullYear()}-${p(when.getMonth() + 1)}-${p(when.getDate())}T${p(when.getHours())}:${p(when.getMinutes())}:00`;
-    const script = [
+    const fmt = (d) => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:00`;
+    const local = whens.map(fmt).join(',');
+    const script = !whens.length
+        ? "Unregister-ScheduledTask -TaskName $env:LLF_TASK -Confirm:$false -ErrorAction SilentlyContinue"
+        : [
         "$ErrorActionPreference = 'Stop'",
-        "$at = [datetime]::ParseExact($env:LLF_AT, 'yyyy-MM-ddTHH:mm:ss', [Globalization.CultureInfo]::InvariantCulture)",
-        "$a = New-ScheduledTaskAction -Execute $env:LLF_EXE -Argument '--daily-run --matchday' -WorkingDirectory (Split-Path $env:LLF_EXE)",
-        '$t = New-ScheduledTaskTrigger -Once -At $at',
+        "$ats = $env:LLF_AT -split ',' | ForEach-Object { [datetime]::ParseExact($_, 'yyyy-MM-ddTHH:mm:ss', [Globalization.CultureInfo]::InvariantCulture) }",
+        "$a = New-ScheduledTaskAction -Execute $env:LLF_EXE -Argument ('--daily-run ' + $env:LLF_MODE) -WorkingDirectory (Split-Path $env:LLF_EXE)",
+        '$t = @($ats | ForEach-Object { New-ScheduledTaskTrigger -Once -At $_ })',
         '$s = New-ScheduledTaskSettingsSet -WakeToRun -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 15) -MultipleInstances IgnoreNew',
-        '$p = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\\$env:USERNAME" -LogonType Interactive -RunLevel Limited',
-        "Register-ScheduledTask -TaskName $env:LLF_TASK -Action $a -Trigger $t -Settings $s -Principal $p -Force -Description 'Resumen de LaLiga Fantasy (fork) 1 h antes del primer partido de la jornada.' | Out-Null",
+        "$p = New-ScheduledTaskPrincipal -UserId ($env:USERDOMAIN + '\\' + $env:USERNAME) -LogonType Interactive -RunLevel Limited",
+        "Register-ScheduledTask -TaskName $env:LLF_TASK -Action $a -Trigger $t -Settings $s -Principal $p -Force -Description 'LaLiga Fantasy (fork): resumen de jornada o avisos de cláusula; despierta el equipo.' | Out-Null",
     ].join('; ');
     execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], {
-        env: { ...process.env, LLF_EXE: process.execPath, LLF_AT: local, LLF_TASK: MATCHDAY_TASK },
+        env: { ...process.env, LLF_EXE: process.execPath, LLF_AT: local, LLF_TASK: taskName, LLF_MODE: mode },
         windowsHide: true,
         timeout: 30000,
     }, (error, _stdout, stderr) => {
@@ -133,7 +142,17 @@ function registerAutomation({ getMainWindow }) {
         if (!Number.isFinite(t) || t <= Date.now() || t - Date.now() > 14 * 24 * 3600 * 1000) {
             return { success: false, error: 'Fecha no válida' };
         }
-        return scheduleMatchdayTask(when);
+        return scheduleOnceTask(MATCHDAY_TASK, MATCHDAY_FLAG, [when]);
+    });
+
+    // Avisos pedidos con /clausula: una tarea con un disparador por aviso (sustituye a la anterior)
+    ipcMain.handle('automation:schedule-clause-reminders', async (_event, times) => {
+        if (!Array.isArray(times) || times.length > 30) return { success: false, error: 'Lista no válida' };
+        const now = Date.now();
+        const whens = times.map((t) => new Date(String(t)))
+            .filter((d) => Number.isFinite(d.getTime()) && d.getTime() > now && d.getTime() - now < 30 * 24 * 3600 * 1000)
+            .sort((x, y) => x - y);
+        return scheduleOnceTask(REMINDERS_TASK, ALERTS_FLAG, whens);
     });
 
     ipcMain.handle('automation:choose-export-dir', async () => {

@@ -5,6 +5,8 @@
  *   userData/fantasy-telegram.json y NUNCA se devuelve al renderer.
  * - Solo se habla con https://api.telegram.org.
  * - Los envíos de documentos solo aceptan archivos de la carpeta de exportación.
+ * - Bot de comandos (/clausula…): solo se atienden mensajes del chat configurado;
+ *   el resto se ignora. Los comandos se pasan al renderer, que solo consulta (lectura).
  */
 const { app, ipcMain, safeStorage } = require('electron');
 const fs = require('fs');
@@ -69,10 +71,68 @@ const sendMessage = async (text) => {
     return true;
 };
 
+const COMMANDS = [
+    { command: 'clausula', description: 'Cuándo se abre la cláusula de un jugador (y alarma)' },
+    { command: 'avisos', description: 'Avisos de cláusula pendientes' },
+    { command: 'ayuda', description: 'Qué puedo hacer' },
+];
+const MAX_MESSAGE_AGE_S = 24 * 3600;
+
+/**
+ * Escucha de comandos por long polling (getUpdates). Arranca cuando el renderer
+ * lo pide (sesión iniciada) y se detiene al cerrar la app.
+ */
+const createBot = () => {
+    let running = false;
+    let paused = false;
+    let offset = 0;
+    let target = null; // webContents que atiende los comandos
+
+    const loop = async () => {
+        while (running) {
+            if (paused) { await new Promise((r) => setTimeout(r, 1000)); continue; }
+            try {
+                const updates = await call('getUpdates', { json: { offset, timeout: 25, allowed_updates: ['message'] } });
+                for (const u of updates) {
+                    offset = Math.max(offset, u.update_id + 1);
+                    const msg = u.message;
+                    const { chatId } = readConfig();
+                    // Solo el chat del usuario y mensajes de texto recientes
+                    if (!msg?.text || !chatId || String(msg.chat?.id) !== String(chatId)) continue;
+                    if (Date.now() / 1000 - (msg.date || 0) > MAX_MESSAGE_AGE_S) continue;
+                    if (target && !target.isDestroyed()) target.send('telegram:command', { text: String(msg.text).slice(0, 200), date: msg.date });
+                }
+            } catch {
+                // Sin red, PC despertando, clave revocada…: reintentar más tarde
+                await new Promise((r) => setTimeout(r, 30000));
+            }
+        }
+    };
+
+    return {
+        start: async (webContents) => {
+            target = webContents;
+            if (running) return { success: true };
+            const { chatId } = readConfig();
+            if (!getToken() || !chatId) return { success: false, error: 'Telegram no está configurado' };
+            running = true;
+            call('setMyCommands', { json: { commands: COMMANDS } }).catch(() => {});
+            loop();
+            return { success: true };
+        },
+        stop: () => { running = false; },
+        pause: (v) => { paused = v; },
+    };
+};
+
 /**
  * @param {{ getExportDir: () => string }} deps
  */
 function registerTelegram({ getExportDir }) {
+    const bot = createBot();
+    app.on('before-quit', () => bot.stop());
+
+    ipcMain.handle('telegram:start-bot', (event) => bot.start(event.sender));
     ipcMain.handle('telegram:get-config', () => {
         const cfg = readConfig();
         return {
@@ -101,6 +161,7 @@ function registerTelegram({ getExportDir }) {
 
     // Busca el chat del usuario: debe haber escrito /start a su bot justo antes
     ipcMain.handle('telegram:detect-chat', async () => {
+        bot.pause(true);
         try {
             const me = await call('getMe');
             const updates = await call('getUpdates', { json: { limit: 50, timeout: 0 } });
@@ -109,6 +170,29 @@ function registerTelegram({ getExportDir }) {
             const chatName = [msg.chat.first_name, msg.chat.last_name].filter(Boolean).join(' ') || msg.chat.username || 'tu chat';
             writeConfig({ ...readConfig(), chatId: String(msg.chat.id), chatName, botName: me.username });
             return { success: true, chatName, botName: me.username };
+        } catch (error) {
+            return { success: false, error: error.message };
+        } finally {
+            bot.pause(false);
+        }
+    });
+
+    // Envía un archivo pequeño generado por la app (p. ej. evento de calendario .ics)
+    ipcMain.handle('telegram:send-file', async (_e, { name, content, caption } = {}) => {
+        try {
+            const { chatId } = readConfig();
+            if (!chatId) throw new Error('Falta el chat de Telegram');
+            if (!/^[A-Za-z0-9._-]{1,80}\.ics$/.test(String(name || ''))) throw new Error('Nombre de archivo no permitido');
+            if (typeof content !== 'string' || content.length > 20000) throw new Error('Contenido no válido');
+            const form = new FormData();
+            form.append('chat_id', chatId);
+            if (caption) {
+                form.append('caption', String(caption).slice(0, 1000));
+                form.append('parse_mode', 'HTML');
+            }
+            form.append('document', new Blob([content], { type: 'text/calendar' }), name);
+            await call('sendDocument', { form });
+            return { success: true };
         } catch (error) {
             return { success: false, error: error.message };
         }

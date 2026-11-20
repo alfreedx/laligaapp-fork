@@ -81,6 +81,22 @@ acceso a Drive, `informe-fantasy.md` y `plantilla.json` son los más cómodos de
 
 Cada informe llega como mensaje (cifras clave y *Qué hacer*) con el PDF adjunto. Los errores también se notifican.
 
+### Comandos del bot
+
+| Comando | Qué hace |
+|---|---|
+| `/clausula nombre` | Cuándo se abre la cláusula de un jugador de cualquier plantilla de la liga (con el bloqueo de jornada), su precio y si te llega con tu saldo. Si aún no está abierta, guarda un aviso y adjunta un evento de calendario (`.ics`) con alarmas 2 min antes y al abrirse. |
+| `/avisos` | Avisos de cláusula pendientes. |
+| `/ayuda` | Lista de comandos. |
+
+- Solo se atienden mensajes **de tu chat** (el detectado en Ajustes); el resto se ignoran.
+- Los comandos solo **leen** datos de la liga: nunca pujan, venden ni cambian nada.
+- La app recibe los comandos mientras está abierta. Si el PC estaba dormido, responde al despertar
+  (Telegram guarda los mensajes 24 h).
+- El aviso de Telegram 2 min antes lo envía el PC: cada `/clausula` reprograma la tarea
+  **"LaLigaFantasy - Avisos de cláusula"** (un disparador por aviso, despierta el equipo y abre la app
+  con `--daily-run --alerts` 3 min antes). La alarma del calendario del móvil no depende del PC.
+
 ## Avisos de cláusulas
 
 Con la app abierta (aunque esté minimizada), se envía una notificación (y un Telegram) **2 minutos antes** de que se abra la

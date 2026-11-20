@@ -37,6 +37,11 @@ a **LaLigaApp 3.5.7** de Externoak y cuándo. Para el historial del proyecto ori
   **filtros** (estado y apertura de cláusula, cláusula vs valor por rangos, valor, tendencia,
   estado, probabilidad de jugar, xP, dueño, asequible con mi saldo, rentable en N días).
 
+- **Bot de Telegram con comandos**: `/clausula nombre` (cuándo se abre, precio, si te llega,
+  aviso 2 min antes y evento de calendario con alarma para el móvil), `/avisos` y `/ayuda`. Solo
+  atiende al chat configurado y solo lee datos.
+- Informe: oportunidades separadas en **mercado de LaLiga** y **cláusulas de otros managers**.
+
 ### Cambiado
 - Rentabilidad → *Mercado hoy*: solo los jugadores que pone LaLiga (sin los de otros managers).
 - El README original de LaLigaApp se conserva íntegro en `docs/upstream/`.

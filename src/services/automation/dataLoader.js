@@ -13,14 +13,8 @@ import { firstKickoff, resolveMatchday } from '../analytics/matchday';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export const loadLeagueData = async ({ leagueId, user }) => {
-  const init = await teamService.initialize(leagueId, user);
-  if (!init?.success) throw new Error(init?.error || 'No se pudo identificar tu equipo');
-  const myTeamId = String(init.teamId);
-
-  const standings = extractArray(await fantasyAPI.getLeagueRanking(leagueId));
-
-  // Equipos en serie con una pausa corta: evita 429 del API.
+// Equipos en serie con una pausa corta: evita 429 del API.
+const fetchTeams = async (leagueId, standings) => {
   const teams = [];
   for (const entry of standings) {
     const teamId = entry.team?.id || entry.id;
@@ -42,6 +36,54 @@ export const loadLeagueData = async ({ leagueId, user }) => {
     }
     await sleep(250);
   }
+  return teams;
+};
+
+// Inicio real de la jornada = primer partido del calendario (respaldo: openingWeekDate)
+const fetchMatchday = async (weekInfo) => {
+  const week = weekInfo?.weekNumber ?? null;
+  const kickoffOf = async (w) => {
+    if (!w) return null;
+    try {
+      const res = await fantasyAPI.getMatchday(w);
+      return firstKickoff(extractArray(res?.data ?? res));
+    } catch {
+      return null;
+    }
+  };
+  const weekKickoff = await kickoffOf(week);
+  const now = new Date();
+  const nextKickoff = weekKickoff && new Date(weekKickoff) > now ? null : await kickoffOf(week ? week + 1 : null);
+  return resolveMatchday({ week, weekKickoff, nextKickoff, openingWeekDate: weekInfo?.openingWeekDate, now });
+};
+
+const initLeague = async ({ leagueId, user }) => {
+  const init = await teamService.initialize(leagueId, user);
+  if (!init?.success) throw new Error(init?.error || 'No se pudo identificar tu equipo');
+  const standings = extractArray(await fantasyAPI.getLeagueRanking(leagueId));
+  return { myTeamId: String(init.teamId), standings };
+};
+
+/** Versión ligera para el bot: plantillas (con cláusulas), saldo y jornada. */
+export const loadClauseData = async ({ leagueId, user }) => {
+  const { myTeamId, standings } = await initLeague({ leagueId, user });
+  const teams = await fetchTeams(leagueId, standings);
+  const [moneyRes, weekRes] = await Promise.all([
+    fantasyAPI.getTeamMoney(myTeamId).catch(() => null),
+    fantasyAPI.getCurrentWeek().catch(() => null),
+  ]);
+  return {
+    myTeamId,
+    myTeam: teams.find((t) => t.teamId === myTeamId) || null,
+    myMoney: readTeamMoney(moneyRes) ?? null,
+    teams,
+    matchday: await fetchMatchday(weekRes?.data || null),
+  };
+};
+
+export const loadLeagueData = async ({ leagueId, user }) => {
+  const { myTeamId, standings } = await initLeague({ leagueId, user });
+  const teams = await fetchTeams(leagueId, standings);
 
   const [activity, marketRes, moneyRes, weekRes, allPlayersRes, lineupRes] = await Promise.all([
     fetchAllActivity(leagueId),
@@ -112,21 +154,7 @@ export const loadLeagueData = async ({ leagueId, user }) => {
 
   const weekInfo = weekRes?.data || null; // { weekNumber, openingWeekDate, closingWeekDate, isLive }
   const week = weekInfo?.weekNumber ?? null;
-
-  // Inicio real de la jornada = primer partido del calendario (respaldo: openingWeekDate)
-  const kickoffOf = async (w) => {
-    if (!w) return null;
-    try {
-      const res = await fantasyAPI.getMatchday(w);
-      return firstKickoff(extractArray(res?.data ?? res));
-    } catch {
-      return null;
-    }
-  };
-  const weekKickoff = await kickoffOf(week);
-  const nowLoad = new Date();
-  const nextKickoff = weekKickoff && new Date(weekKickoff) > nowLoad ? null : await kickoffOf(week ? week + 1 : null);
-  const matchday = resolveMatchday({ week, weekKickoff, nextKickoff, openingWeekDate: weekInfo?.openingWeekDate, now: nowLoad });
+  const matchday = await fetchMatchday(weekInfo);
   const ownerByPlayer = new Map();
   teams.forEach((t) => t.players.forEach((p) => ownerByPlayer.set(String(p.playerMaster?.id), t)));
 

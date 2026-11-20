@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     notify: (title, body) => ipcRenderer.invoke('automation:notify', { title, body }),
     dailyRunFinished: (reason) => ipcRenderer.invoke('automation:daily-run-finished', reason),
     scheduleMatchdaySummary: (at) => ipcRenderer.invoke('automation:schedule-matchday-summary', at),
+    scheduleClauseReminders: (times) => ipcRenderer.invoke('automation:schedule-clause-reminders', times),
     onRunNow: (cb) => {
       const sub = (_e, d) => cb(d);
       ipcRenderer.on('automation:run-now', sub);
@@ -58,6 +59,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     detectChat: () => ipcRenderer.invoke('telegram:detect-chat'),
     sendMessage: (text) => ipcRenderer.invoke('telegram:send-message', text),
     sendDocument: (name, caption) => ipcRenderer.invoke('telegram:send-document', { name, caption }),
+    sendFile: (name, content, caption) => ipcRenderer.invoke('telegram:send-file', { name, content, caption }),
+    startBot: () => ipcRenderer.invoke('telegram:start-bot'),
+    onCommand: (cb) => {
+      const sub = (_e, d) => cb(d);
+      ipcRenderer.on('telegram:command', sub);
+      return () => ipcRenderer.removeListener('telegram:command', sub);
+    },
   },
 
   // ✅ fixed logger

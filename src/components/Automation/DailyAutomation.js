@@ -4,6 +4,7 @@ import { runDailyJob, isRunDue } from '../../services/automation/dailyJob';
 import { loadSettings, loadState } from '../../services/automation/localStore';
 import { checkClauseAlerts } from '../../services/automation/clauseAlerts';
 import { runMatchdayJob, isMatchdaySummaryDue } from '../../services/automation/matchdayJob';
+import { handleBotMessage } from '../../services/automation/botHandler';
 
 const CHECK_EVERY_MS = 60 * 1000;
 
@@ -47,6 +48,16 @@ const DailyAutomation = () => {
 
     (async () => {
       const cfg = ea ? await ea.getConfig() : {};
+      // Abierta por un aviso de /clausula: esperar a que toque (≤ 5 min), avisar y cerrar
+      if (cfg.isDailyRun && cfg.dailyRunMode === 'alerts') {
+        let sent = 0;
+        for (let i = 0; i < 25 && !sent && !cancelled; i++) {
+          sent = await checkClauseAlerts().catch(() => 0);
+          if (!sent) await new Promise((r) => setTimeout(r, 15000));
+        }
+        if (!cancelled) await ea.dailyRunFinished('ok');
+        return;
+      }
       if (cfg.isDailyRun && cfg.dailyRunMode === 'matchday') {
         const r = await runMatchday(true);
         if (!cancelled) await ea.dailyRunFinished(r?.success ? 'ok' : 'error');
@@ -62,12 +73,25 @@ const DailyAutomation = () => {
       checkClauseAlerts().catch(() => {});
       runMatchday().catch(() => {});
     }, CHECK_EVERY_MS);
-    const unsub = ea?.onRunNow?.((d) => { if (d?.mode === 'matchday') runMatchday(true); else run('scheduler', true); });
+    const unsub = ea?.onRunNow?.((d) => {
+      if (d?.mode === 'matchday') runMatchday(true);
+      else if (d?.mode === 'alerts') checkClauseAlerts().catch(() => {});
+      else run('scheduler', true);
+    });
+
+    // Bot de Telegram: comandos como /clausula (solo del chat configurado)
+    const tg = window.electronAPI?.telegram;
+    const unsubBot = tg?.onCommand?.((msg) => {
+      const { leagueId: lid, user: u } = ctx.current;
+      handleBotMessage(msg, { leagueId: lid, user: u }).catch(() => {});
+    });
+    tg?.startBot?.().catch(() => {});
 
     return () => {
       cancelled = true;
       clearInterval(timer);
       unsub?.();
+      unsubBot?.();
     };
   }, [ready]);
 
