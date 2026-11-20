@@ -27,7 +27,7 @@ const H48 = 48 * 3600 * 1000;
 export const buildReportModel = (data, { settings = {}, autoMarketLog = [], leagueName = '', clauseSpend = null, backtests = {}, edition = 'apertura' } = {}) => {
   const days = settings.projectionDays || 5;
   const now = new Date();
-  const common = { ledger: data.ledger, resolveTrend: data.resolveTrend, rateMode: 'avg3' };
+  const common = { ledger: data.ledger, resolveTrend: data.resolveTrend, rateMode: 'daily' }; // proyección = subida del último día × N días
 
   // Inicio de la jornada (primer partido) y bloqueo de cláusulas de las 24 h previas
   const kickoff = data.matchday?.kickoff || null;
@@ -279,7 +279,7 @@ export const renderMarkdown = (m) => {
   }
 
   const econMd = (rows, clause) => (rows.length ? table(['Jugador', clause ? 'Dueño' : 'Precio', clause ? 'Cláusula' : 'Puja', 'Puja máx. rentable', `Gana en ${m.days}d`, 'Rentab.', 'Tendencia/día', 'Disponible'],
-    rows.map((r) => [`${r.name} (${r.position})`, clause ? r.from : M(r.price), clause ? M(r.price) : (r.bid ? `~${M(r.bid)}` : '—'), `${M(r.maxBid)}${r.bidTooHigh ? ' ⚠️' : ''}`, SM(r.gainNLaLiga), PCT(r.roiN), `${trendArrow(r.growthAvg3)} ${K(r.growthAvg3)}${isNum(r.growthAvg3Pct) ? ` (${PCT2(r.growthAvg3Pct)})` : ''}`, r.available]))
+    rows.map((r) => [`${r.name} (${r.position})`, clause ? r.from : M(r.price), clause ? M(r.price) : (r.bid ? `~${M(r.bid)}` : '—'), `${M(r.maxBid)}${r.bidTooHigh ? ' ⚠️' : ''}`, SM(r.gainNLaLiga), PCT(r.roiN), `${trendArrow(r.dailyGrowth)} ${K(r.dailyGrowth)}${isNum(r.dailyGrowthPct) ? ` (${PCT2(r.dailyGrowthPct)})` : ''}`, r.available]))
     : 'Ninguna con ganancia esperada.');
   const sportMd = (rows, clause) => (rows.length ? table(['Jugador', clause ? 'Dueño' : 'Origen', 'Precio', 'xP', 'Mejora a', 'Próximo (juega)', 'Puja máx. rentable', `Rentab. ${m.days}d`, 'Disponible'],
     rows.map((r) => [
@@ -313,7 +313,7 @@ export const renderMarkdown = (m) => {
   md.push('## 📋 Tu plantilla');
   md.push(table(['Jugador', 'Valor', 'Tendencia/día', 'Ganancia LaLiga hoy', `en ${m.days}d`, 'xP', 'Notas'],
     m.squad.map((r) => [
-      `${r.name} (${r.position})`, M(r.value), `${trendArrow(r.growthAvg3)} ${K(r.growthAvg3)}${isNum(r.growthAvg3Pct) ? ` (${PCT2(r.growthAvg3Pct)})` : ''}`, SM(r.latentGainLaLiga), SM(r.gainNLaLiga), N(r.xp),
+      `${r.name} (${r.position})`, M(r.value), `${trendArrow(r.dailyGrowth)} ${K(r.dailyGrowth)}${isNum(r.dailyGrowthPct) ? ` (${PCT2(r.dailyGrowthPct)})` : ''}`, SM(r.latentGainLaLiga), SM(r.gainNLaLiga), N(r.xp),
       [STATUS_ICON[r.status], r.inMarket ? '🏷️' : '', r.isShielded ? '🛡️' : r.clauseIsOpen ? '🔓' : ''].filter(Boolean).join(' '),
     ])));
   md.push('');

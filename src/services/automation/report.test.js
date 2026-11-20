@@ -92,3 +92,14 @@ test('cláusulas bloqueadas 24 h antes del primer partido', () => {
   // La cláusula del rival (abierta) no se puede pagar hasta el primer partido
   expect(r.clauseWatch.every((w) => w.openAt === kickoff)).toBe(true);
 });
+
+test('proyección a 5 días con la subida del ÚLTIMO día, no con la media de días anteriores', () => {
+  const rival = { playerTeamId: 'rx', buyoutClause: 10e6, buyoutClauseLockedEndTime: null, playerMaster: pm('77', 'Auba', 4, { averagePoints: 6 }) };
+  const teams = [data.teams[0], { ...data.teams[1], players: [rival] }];
+  // Ayer subió 100 K, pero la media de 3 días es 300 K (tendencia pasada que ya no tiene)
+  const trend = { valor: 10e6, valor1: 9.9e6, valor3: 9.1e6, diferencia1: 100e3, playProbability: 1 };
+  const r = buildDailyReport({ ...data, teams, resolveTrend: (p) => (p.id === '77' ? trend : null), trendsOk: true }, { settings: { projectionDays: 5 } });
+  const opp = [...r.json.oportunidadesEconomicas, ...r.json.oportunidadesDeportivas].find((o) => o.nombre === 'Auba');
+  // (10 M + 5 × 100 K) × 1,1 = 11,55 M → puja máx. rentable 11,5 M (con la media de 3 días serían 12,6 M)
+  expect(opp.pujaMaxRentable).toBe(11_500_000);
+});

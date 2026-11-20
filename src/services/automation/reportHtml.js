@@ -151,7 +151,7 @@ export const renderReportHtml = (m) => {
         `<b>${esc(M(r.maxBid))}</b>${r.bidTooHigh ? '<div class="small neg">la puja habitual la supera</div>' : ''}`,
         `<span class="${signCls(r.gainNLaLiga)}">${esc(SM(r.gainNLaLiga))}</span>`,
         `<span class="${signCls(r.roiN)}">${esc(PCT(r.roiN))}</span>`,
-        trendHtml(r.growthAvg3, r.growthAvg3Pct), esc(r.available),
+        trendHtml(r.dailyGrowth, r.dailyGrowthPct), esc(r.available),
       ]))
     : '<p class="small">Ninguna con ganancia esperada.</p>');
   const sportTable = (rows, clause) => (rows.length
@@ -181,7 +181,7 @@ export const renderReportHtml = (m) => {
   // Plantilla
   parts.push(section('📋 Tu plantilla', table(['Jugador', 'Valor', 'Tendencia/día', 'Ganancia LaLiga', `en ${m.days}d`, 'xP', ''],
     m.squad.map((r) => [
-      `${pos(r)}${esc(r.name)}`, esc(M(r.value)), trendHtml(r.growthAvg3, r.growthAvg3Pct),
+      `${pos(r)}${esc(r.name)}`, esc(M(r.value)), trendHtml(r.dailyGrowth, r.dailyGrowthPct),
       `<span class="${signCls(r.latentGainLaLiga)}">${esc(SM(r.latentGainLaLiga))}</span>`,
       `<span class="${signCls(r.gainNLaLiga)}">${esc(SM(r.gainNLaLiga))}</span>`, esc(N(r.xp)),
       esc([STATUS_ICON[r.status], r.inMarket ? '🏷️' : '', r.isShielded ? '🛡️' : r.clauseIsOpen ? '🔓' : ''].filter(Boolean).join(' ')),

@@ -53,6 +53,8 @@ a **LaLigaApp 3.5.7** de Externoak y cuándo. Para el historial del proyecto ori
 - Ofertas: "mala jornada prevista" pasa a ser relativa a su posición (< 50 % del titular medio).
 
 ### Cambiado
+- Informe: la proyección a N días usa la subida del **último día** (antes, la media de 3 días
+  arrastraba tendencias que el jugador ya no tiene y sobreestimaba la puja máxima rentable).
 - Rentabilidad → *Mercado hoy*: solo los jugadores que pone LaLiga (sin los de otros managers).
 - El README original de LaLigaApp se conserva íntegro en `docs/upstream/`.
 - Repositorio público.
