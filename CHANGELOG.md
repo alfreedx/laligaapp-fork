@@ -51,8 +51,14 @@ a **LaLigaApp 3.5.7** de Externoak y cuándo. Para el historial del proyecto ori
   del once e intervalo bootstrap. Se guarda cada día la probabilidad de jugar de futbolfantasy
   en la captura local para poder validarla en el futuro.
 - Ofertas: "mala jornada prevista" pasa a ser relativa a su posición (< 50 % del titular medio).
+- Registro de la automatización (`fantasy-data/automation.log`, con rotación y sin tokens) y comando
+  `/estado` del bot (último informe, primer partido, avisos pendientes y últimos problemas).
+- El contexto del xP (medias por posición, fuerza de los rivales, próximos partidos) se guarda en
+  disco: Rentabilidad y Mi Alineación usan el mismo xP que el informe y avisan si tiene más de 7 días.
 
 ### Cambiado
+- **Seguridad**: el servidor local (proxy con la sesión de la cuenta) escucha solo en `127.0.0.1`.
+  `APP_HOST=0.0.0.0` (o `ELECTRON_SERVER_HOST`) vuelve a abrirlo a la red local.
 - Informe: la proyección a N días usa la subida del **último día** (antes, la media de 3 días
   arrastraba tendencias que el jugador ya no tiene y sobreestimaba la puja máxima rentable).
 - Rentabilidad → *Mercado hoy*: solo los jugadores que pone LaLiga (sin los de otros managers).
@@ -60,6 +66,8 @@ a **LaLigaApp 3.5.7** de Externoak y cuándo. Para el historial del proyecto ori
 - Repositorio público.
 
 ### Eliminado
+- Actualizador del proyecto original (`electron/auto-updater.js`, `UpdateChecker`, `updateService` y
+  la dependencia `adm-zip`): buscaba versiones de Externoak que no se podían instalar en el fork.
 - Código sin uso heredado: `CorsHelp`, `PlayerCard`, `Dashboard/MarketTrends` (esqueleto),
   `TopPlayers`, `VersionInfo`.
 - Despliegue web con Docker/nginx (`docker/`, `docker-compose.yml`, `nginx.conf`, `.dockerignore`):
@@ -69,6 +77,7 @@ a **LaLigaApp 3.5.7** de Externoak y cuándo. Para el historial del proyecto ori
 - Imágenes sin uso en `build-resources/` y dependencias sin uso (`supertest`, `@types/dompurify`).
 
 ### Corregido
+- Test de `clauseUtils` que fallaba al azar según el reloj.
 - Aviso de ESLint en el manejador de errores del servidor (`_next`).
 
 ## [1.0.0-fork] — 2026-11-18

@@ -87,6 +87,7 @@ Cada informe llega como mensaje (cifras clave y *Qué hacer*) con el PDF adjunto
 |---|---|
 | `/clausula nombre` | Cuándo se abre la cláusula de un jugador de cualquier plantilla de la liga (con el bloqueo de jornada), su precio y si te llega con tu saldo. Si aún no está abierta, guarda un aviso y adjunta un evento de calendario (`.ics`) con alarmas 2 min antes y al abrirse. |
 | `/avisos` | Avisos de cláusula pendientes. |
+| `/estado` | Último informe, primer partido, avisos pendientes y últimos problemas del registro. |
 | `/ayuda` | Lista de comandos. |
 
 - Solo se atienden mensajes **de tu chat** (el detectado en Ajustes); el resto se ignoran.
@@ -132,3 +133,4 @@ El resultado aparece en el informe y en *Ajustes*.
 | "Informe Fantasy: no generado" | Sesión caducada o sin conexión: abre la app e inicia sesión. |
 | El PDF no aparece | *Ajustes* muestra el error del último intento; el `.md` y el `.json` se escriben igualmente. |
 | No llegan avisos de cláusula | La app debe estar abierta; la lista se crea al generar un informe. |
+| Cualquier otro fallo | Escribe `/estado` al bot o mira `%APPDATA%\laliga-fantasy-app\fantasy-data\automation.log`. |
