@@ -8,7 +8,6 @@ const {
     ensureUnifiedServer,
     stopUnifiedServer,
 } = require('./electron/server-manager');
-const { processPendingUpdates } = require('./electron/auto-updater');
 const { registerIpcHandlers } = require('./electron/ipc-handlers');
 const { registerAutomation, getExportDir } = require('./electron/automation');
 const { registerTelegram } = require('./electron/telegram');
@@ -17,8 +16,6 @@ let mainWindow;
 const activeAppOrigins = new Set();
 
 async function createWindow() {
-    await processPendingUpdates();
-
     activeAppOrigins.clear();
 
     const preloadPath = path.join(__dirname, 'preload.js');

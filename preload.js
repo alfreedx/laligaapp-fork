@@ -9,19 +9,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // and resolves with the captured authorization code.
   startOAuthLogin: (config) => ipcRenderer.invoke('start-oauth-login', config),
 
-  // Auto-update (updateService.js)
-  downloadAndInstallUpdate: (data) => ipcRenderer.invoke('download-and-install-update', data),
-  restartApp: () => ipcRenderer.invoke('restart-app'),
-
   openFileDialog: () => ipcRenderer.invoke('open-file-dialog'),
   getServerAddresses: () => ipcRenderer.invoke('get-server-addresses'),
-
-  onUpdateProgress: (cb) => {
-    const sub = (_e, d) => cb(d);
-    ipcRenderer.on('update-progress', sub);
-    return () => ipcRenderer.removeListener('update-progress', sub);
-  },
-  removeAllUpdateListeners: () => ipcRenderer.removeAllListeners('update-progress'),
 
   getAppVersion: () => process.env.npm_package_version || '1.0.0',
   isElectron: () => true,

@@ -11,10 +11,9 @@ import useSearch from '../../hooks/useSearch';
 import { fantasyAPI } from '../../services/api';
 import ApiStatus from '../Common/ApiStatus';
 import SearchResults from '../Common/SearchResults';
-import UpdateChecker from '../Common/UpdateChecker';
 import ChangelogModal from '../Common/ChangelogModal';
 import PairDeviceModal from './PairDeviceModal';
-import updateService from '../../services/updateService';
+import { APP_VERSION } from '../../utils/appVersion';
 import { sanitizeSearchTerm } from '../../utils/validation';
 import { setImageFallback, getPositionName, extractArray, formatCurrencyCompact as formatCurrency } from '../../utils/helpers';
 import MobileNav from './MobileNav';
@@ -161,7 +160,7 @@ const SidebarFooter = React.memo(function SidebarFooter({ isAuthenticated, isEle
       <div className="mt-2 px-3 py-2 border-t border-gray-200 dark:border-gray-700">
         <div className="text-[10px] text-gray-400 dark:text-gray-500 text-center space-y-0.5 leading-tight">
           <div className="flex items-center justify-center gap-2 mb-1">
-            <p className="font-medium text-[11px]">v{updateService.getCurrentVersion()}</p>
+            <p className="font-medium text-[11px]">v{APP_VERSION}</p>
             <button onClick={onOpenChangelog} className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors group" title="Ver cambios" aria-label="Ver historial de cambios">
               <FileText className="w-3 h-3 text-gray-400 group-hover:text-primary-500 transition-colors" />
             </button>
@@ -669,7 +668,6 @@ const Layout = ({ children }) => {
             <TopBarMobileInfo user={user} />
 
             <div className="flex items-center gap-2">
-              <div className="hidden md:block"><UpdateChecker /></div>
               <a
                 href="https://github.com/Externoak/LaLigaApp/issues"
                 target="_blank"
