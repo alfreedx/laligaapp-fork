@@ -9,6 +9,7 @@ import { fantasyAPI } from '../../services/api';
 import useMarketTrends from '../../hooks/useMarketTrends';
 import marketTrendsService from '../../services/marketTrendsService';
 import { forecastPoints, bestLineup, FORMATIONS } from '../../services/analytics/forecast';
+import { ensureXpContextLoaded } from '../../services/automation/xpContextStore';
 import { useAuthStore } from '../../stores/authStore';
 import LoadingSpinner from '../Common/LoadingSpinner';
 import toast from 'react-hot-toast';
@@ -339,6 +340,8 @@ const LineupEditor = () => {
   // editor: el usuario revisa y pulsa Guardar.
   const { trendsReady } = useMarketTrends();
   const [recommendation, setRecommendation] = useState(null);
+  // Mismo modelo de xP que el informe (rival, medias por posición)
+  useEffect(() => { ensureXpContextLoaded().catch(() => null); }, []);
 
   const handleLoadRecommended = () => {
     if (!teamPlayers.length) {

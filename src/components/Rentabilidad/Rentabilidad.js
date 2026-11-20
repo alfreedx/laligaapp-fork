@@ -13,6 +13,7 @@ import LoadingState from '../Common/LoadingState';
 import RentabilidadFilters from './RentabilidadFilters';
 import { applyFilters, EMPTY_FILTERS, clauseOverValue } from '../../services/analytics/filters';
 import { applyClauseLock, isClauseLocked } from '../../services/analytics/matchday';
+import { ensureXpContextLoaded, xpContextAgeDays, XP_CONTEXT_MAX_AGE_DAYS } from '../../services/automation/xpContextStore';
 import ErrorState from '../Common/ErrorState';
 
 // ---------- formato ----------
@@ -284,6 +285,9 @@ const Rentabilidad = () => {
   const [clauseSpend, setClauseSpend] = useState(null);
   // Primer partido de la próxima jornada (lo guarda el informe diario): bloqueo de cláusulas 24 h antes
   const [kickoff, setKickoff] = useState(null);
+  // Mismo modelo de xP que el informe (medias por posición, rivales): se carga del disco
+  const [xpMeta, setXpMeta] = useState(null);
+  useEffect(() => { ensureXpContextLoaded().then((m) => setXpMeta(m || { missing: true })).catch(() => setXpMeta({ missing: true })); }, []);
   useEffect(() => {
     loadState().then((st) => {
       setKickoff(st?.nextKickoff || null);
@@ -337,7 +341,9 @@ const Rentabilidad = () => {
       default: r = [];
     }
     return r;
-  }, [tab, a.ledger, a.resolveTrend, a.trendById, a.myTeam, a.market, a.ownerByPlayer, a.teams, a.myTeamId, a.myMoney, a.playerNames, rateMode, clauseSpend, kickoff]);
+    // xpMeta: recalcular cuando se carga el contexto del xP (forecastPoints lo lee del módulo)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, a.ledger, a.resolveTrend, a.trendById, a.myTeam, a.market, a.ownerByPlayer, a.teams, a.myTeamId, a.myMoney, a.playerNames, rateMode, clauseSpend, kickoff, xpMeta]);
 
   // Recalcular proyecciones con N días distinto de 5
   const rowsN = useMemo(() => {
@@ -473,6 +479,11 @@ const Rentabilidad = () => {
             onChange={(e) => setDays(Math.max(1, Math.min(30, parseInt(e.target.value, 10) || 5)))}
           />
         </label>
+        {xpMeta && (xpMeta.missing || xpContextAgeDays(xpMeta) > XP_CONTEXT_MAX_AGE_DAYS) && (
+          <span className="text-xs text-amber-700 dark:text-amber-400" title="Genera un informe (Ajustes → Generar ahora) para actualizar medias por posición y rivales">
+            ⚠️ xP sin datos de rivales recientes{xpMeta.createdAt ? ` (del ${fmtDate(xpMeta.createdAt)})` : ''}
+          </span>
+        )}
         {isClauseLocked(kickoff) && ['squad', 'rivals'].includes(tab) && (
           <span className="text-xs text-amber-700 dark:text-amber-400">🔒 Cláusulas bloqueadas hasta el primer partido ({fmtDate(kickoff)})</span>
         )}

@@ -11,7 +11,7 @@ import { fetchAllActivity } from '../../hooks/useLeagueAnalytics';
 import { buildLedger } from '../analytics/ledger';
 import { firstKickoff, resolveMatchday } from '../analytics/matchday';
 import { buildXpContext } from '../analytics/xpModel';
-import { setXpContext } from '../analytics/forecast';
+import { saveXpContext } from './xpContextStore';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -184,7 +184,7 @@ export const loadLeagueData = async ({ leagueId, user }) => {
     await sleep(120);
   }
   const xpContext = buildXpContext({ playerMasters: masters, calendarByWeek, nextWeek: matchday?.week });
-  setXpContext(xpContext);
+  await saveXpContext(xpContext, matchday?.week ?? null); // en memoria y en disco (lo usa también la interfaz)
   const ownerByPlayer = new Map();
   teams.forEach((t) => t.players.forEach((p) => ownerByPlayer.set(String(p.playerMaster?.id), t)));
 

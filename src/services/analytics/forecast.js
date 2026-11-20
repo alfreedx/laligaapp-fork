@@ -23,7 +23,7 @@ const DEFAULT_PRIORS = { 1: 5, 2: 5, 3: 5, 4: 5 };
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
-/** Contexto actual del modelo (lo fija el cargador de datos de la liga). */
+/** Contexto actual del modelo (lo fija el informe y se guarda en disco: ver xpContextStore). */
 let currentContext = null;
 export const setXpContext = (ctx) => { currentContext = ctx; };
 export const getXpContext = () => currentContext;
